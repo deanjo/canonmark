@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "canonmark"
+version = "0.1.0"
+description = "Tell your AI agents which doc to trust — an auditable authority contract for your docs/"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "canonmark contributors" }]
+keywords = ["documentation", "ai-agents", "governance", "frontmatter", "docs-as-code", "pre-commit"]
+
+# 运行时零硬依赖:纯标准库即可跑 V2/V4/V9 三门;V5/V10 需要 PyYAML(可选)。
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+dev = ["pytest>=7.0", "PyYAML>=6.0"]
+
+[project.scripts]
+canon = "canonmark.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/canonmark/canonmark"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canonmark"]
