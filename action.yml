@@ -1,0 +1,21 @@
+name: "canonmark"
+description: "Audit document authority metadata so AI agents know which doc to trust"
+branding:
+  icon: "check-circle"
+  color: "blue"
+inputs:
+  path:
+    description: "docs directory to audit"
+    required: false
+    default: "docs/"
+  config:
+    description: "path to canonmark.toml"
+    required: false
+    default: "canonmark.toml"
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: pip install canonmark[yaml]
+    - shell: bash
+      run: canon audit "${{ inputs.path }}" --config "${{ inputs.config }}"

@@ -1,0 +1,11 @@
+# fixture 治理配置。审计时 `canon audit <此目录> --config <此文件>`：
+# 运行时 docs_root 取被审计目录名，故此处 docs_root 仅为说明。
+docs_root = "docs"
+
+# 无产品代号 / 元目录例外：任何非 kebab-case 目录都要被 V2 抓。
+v2_path_exceptions = []
+
+# 固定必备关键文档指向本 fixture 里真实存在且合规的 roadmap.md，
+# 避免 agong 默认清单（_restructure/... 等）带来「固定关键文档不存在」噪声。
+required_key_documents = ["roadmap.md"]
+required_key_document_globs = []

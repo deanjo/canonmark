@@ -1,0 +1,30 @@
+# canonmark 自己的治理配置（dogfood）。
+#
+# canonmark 用它审自己的 docs/，是「改配置不改代码就能换项目」的最强证据：
+# 与 agong 的差异全部在这里表达，src/ 一行不改。
+#
+# 省略的字段一律用内置默认（= 通用治理模型词汇表：status = current/background/
+# archive/superseded；authority = roadmap-current/task-current/contract-current/
+# acceptance-current/background-reference/historical-evidence）。这套词汇表是治理
+# 模型的固定部分，不是项目品牌，canonmark 直接沿用，不覆盖。
+
+# docs 根目录名。
+docs_root = "docs"
+
+# 目录命名：kebab-case，无产品代号 / 元目录例外（agong 的 deep_search6.0、
+# _restructure 是「使用者作用域例外」，不进 canonmark 默认）。
+v2_path_exceptions = []
+directory_name_regex = "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+directory_name_label = "kebab-case"
+
+# 文件命名：禁 agent_ 前缀（通用默认）。canonmark 的 task 文件名不容忍 agent_ 前缀，
+# 只认 t<数字>；这也是与 agong（容忍历史 agent_ 前缀）的差异点。
+task_file_prefix_regex = "^t\\d+(?:[-_.]|$)"
+
+# V5 固定必备关键文档：canonmark 实际存在的三份权威文档。
+required_key_documents = ["roadmap.md", "acceptance.md", "kickoff.md"]
+required_key_document_globs = []
+
+# 前瞻字段（供 pre-commit / CI hook 使用，当前审计逻辑不消费）。
+trigger_paths = ["docs/"]
+auditor_home = "src/canonmark"

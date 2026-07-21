@@ -1,0 +1,29 @@
+# canonmark 的反馈链路（远端）：两道彼此解耦的检查。
+#   tests      —— 审计器自身的 42 个单测，保工具质量。
+#   self-audit —— canonmark 用自己审自己的 docs，保文档治理（dogfood）。
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/ -q
+
+  self-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[yaml]"
+      - run: canon audit docs/ --config canonmark.toml

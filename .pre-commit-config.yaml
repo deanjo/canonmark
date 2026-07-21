@@ -1,0 +1,11 @@
+# canonmark 用自己的审计器审自己的 docs（dogfood）。
+# 本地提交时触碰 docs/*.md 就跑一次自审，把「文档撒谎」挡在提交前。
+repos:
+  - repo: local
+    hooks:
+      - id: canon-audit-self
+        name: canon audit (self / dogfood)
+        entry: canon audit docs/ --config canonmark.toml
+        language: system
+        pass_filenames: false
+        files: ^docs/.*\.md$

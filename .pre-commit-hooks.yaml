@@ -1,0 +1,15 @@
+# canonmark 作为 pre-commit hook 仓库供其它项目引用。使用方在其 .pre-commit-config.yaml：
+#   repos:
+#     - repo: https://github.com/canonmark/canonmark
+#       rev: v0.1.0
+#       hooks:
+#         - id: canon-audit
+# 使用方项目根需有一份 canonmark.toml（canon init 生成）。
+- id: canon-audit
+  name: canonmark authority audit
+  description: Audit document authority metadata in docs/ so AI agents know which doc to trust
+  entry: canon audit
+  language: python
+  files: ^docs/.*\.md$
+  pass_filenames: false
+  args: ["docs/", "--config", "canonmark.toml"]

@@ -16,9 +16,10 @@ last_reviewed: 2026-07-21
 | [acceptance.md](./acceptance.md) | 验收矩阵 | acceptance-current |
 | [kickoff.md](./kickoff.md) | 编排纪律与红线 | contract-current |
 | [progress.md](./progress.md) | 进度心跳日志 | 记录 |
+| [design/](./design/README.md) | 设计文档索引 | — |
 | [design/vision.md](./design/vision.md) | 价值与要解决的问题 | background-reference |
 | [design/protocol.md](./design/protocol.md) | 权威元数据契约与五步判定协议 | contract-current |
-| [tasks/](./tasks/) | 任务分片 | task-current |
+| [tasks/](./tasks/README.md) | 任务台账 | task-current |
 
 ## 状态说明
 
