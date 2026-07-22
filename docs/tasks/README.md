@@ -24,10 +24,17 @@ last_reviewed: 2026-07-21
 | T6 设计文档(vision/protocol)+ README 门面 | P0 | 文档 agent | DONE | vision(305 文件冲突已实测)/protocol(8字段+五步+矩阵)/README 门面已写;3 取舍认同:宽松矩阵不纳 sharding 严子集、不编造 P1 代码行号、无环检测标为待 P1 验;protocol 自洽性并入 T8 复核 |
 | T7 自审反馈链路(pre-commit + Action + CI) | P3 | 主 agent | DONE | 4 文件已写;本地 pre-commit 真跑 `Passed` exit 0(A7 本地);远端 CI 待推送后验 |
 | T8 独立 subagent 验收 A1–A11 | P4 | 验收 agent | DONE | 独立复现判定 ACCEPT,A1–A11 全 PASS,无 FAIL;含 protocol 自洽核对 |
-| T9 发布准备(README/pyproject 完善)+ 远程发布 | P5 | 主 agent + 用户 | TODO | 远程发布留用户拍板(红线);发布物基本齐,待用户回来 |
+| T10 反向指针对称检查 → 判失败 | P5 | 待分配 | TODO | **protocol §2/§8 已承诺但代码未实现**(`supersedes` 仅格式校验);须同步补 acceptance 验收项(上轮 ACCEPT 未覆盖此条) |
+| T11 超期提示 + 孤儿检测 + 新增未声明替代提示 | P5 | 待分配 | TODO | 三者**一律只提示不判失败**;超期若做成失败会引发「全库某天突然变红」→ 门禁被关 |
+| T12 README 清单与文档标签互检 | P5 | 待分配 | TODO | protocol §7.6;导航过期与标签错误互为校验 |
+| T13 `canon_read` 行为契约 + `canon index` 紧凑输出与过滤 | P6 | 待分配 | TODO | protocol §7.4 / §7.5;**主角是 canon_read**,index 不得写成必经路径 |
+| T14 MCP server + `canon init` 生成接线片段 | P6 | 待分配 | TODO | protocol §7.7 话术;让能力出现在消费者工具面,而非仅存在于文档约定 |
+| T9 发布准备(README/pyproject 完善)+ 远程发布 | P7 | 主 agent + 用户 | TODO | 远程发布留用户拍板(红线);发布物基本齐 |
 
 ## 当前波次
 
-- 波次 1(DONE):实现 + 文档两 agent 并行交付,独立验收 ACCEPT,P3 反馈链路本地跑通。
-- 已完成 P0–P4 全部验收项(A0–A11 PASS),仅 A12 属 P5、A7 远端 CI 待推送。
-- 下一步(波次 2,待用户回来):P5 发布准备 + 是否 `gh repo create` 推远程(红线,需用户拍板)。
+- 波次 1(DONE):实现 + 文档两 agent 并行交付,独立验收 ACCEPT,P3 反馈链路本地跑通。已完成 P0–P4 全部验收项(A0–A11 PASS)。
+- **波次 2(NEXT):T10–T12 防腐烂检查组**。做完派独立 subagent 验收,再进波次 3。
+- **波次 3:T13–T14 读取接线**。顺序不可与波次 2 颠倒——理由见 roadmap「依赖顺序」。
+- 波次 4:T9 发布决策(红线,需用户拍板)。
+- 设计依据:三层分工(README 导航 / `canon_read` 兜底 / `canon index` 按需)见 `docs/design/protocol.md` §7,**该节是 2026-07-21 对早期设计的更正**:早期方案曾把「每次先跑全库索引」作为默认路径,会污染上下文,已废止。

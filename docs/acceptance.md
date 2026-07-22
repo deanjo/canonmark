@@ -29,7 +29,14 @@ last_reviewed: 2026-07-21
 | A9 | P4 | VALID fixture 修好后 exit 0 | 同上,valid 变体 | 全 PASS,exit 0 | 五门全 PASS,exit 0 | PASS |
 | A10 | P4 | 改配置不改代码即换项目 | 同 fixture,两份 config 翻转口径 | 结果翻转,.py 零改动 | A3 md5 佐证 .py 未改 | PASS |
 | A11 | P4 | 独立 subagent 验收 ACCEPT | 独立 subagent 复核 A1–A10 证据 | verdict = ACCEPT | 独立验收 ACCEPT,无 FAIL | PASS |
-| A12 | P5 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P5 | PENDING |
+| A13 | P5 | 反向指针不对称被判失败 | fixture:A 声称被 B 取代、B 未声明取代 A | 报错且 exit 1 | 待实现 | PENDING |
+| A14 | P5 | 超期**只提示不失败** | fixture:`last_reviewed` 超阈值 | 有提示输出但 **exit 0** | 待实现 | PENDING |
+| A15 | P5 | 孤儿文档被提示 | fixture:无任何导航链接指向的文档 | 出现在提示中,不判失败 | 待实现 | PENDING |
+| A16 | P5 | README 清单与文档标签互检 | fixture:README 标现行 / 文档自称作废 | 报错 | 待实现 | PENDING |
+| A17 | P6 | `canon_read` 对作废文档不返回正文 | 对 `superseded` 文档调用 canon_read | 返回替代目标,**正文不出现在输出中** | 待实现 | PENDING |
+| A18 | P6 | `canon index` 紧凑且可过滤 | `canon index --json` / `--dir` | 输出字节数 < 全文总量的 10%;过滤生效 | 待实现 | PENDING |
+| A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 真实会话中提问一个新旧文档答案不同的问题 | 答案取自现行文档,非作废文档 | 待实现 | PENDING |
+| A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P7 | PENDING |
 
 ## 未验证范围(诚实边界)
 
