@@ -72,11 +72,11 @@ doc to trust.**
 
 ## Quick start
 
-> **Early development.** The CLI is not published yet — commands below are the
-> intended P1 surface, shown so you can see where this is going.
+> **Early development.** The CLI works and is fully tested, but is not published
+> to PyPI yet — install from source until then.
 
 ```bash
-pip install canonmark          # not on PyPI yet (P1)
+pip install canonmark          # not published yet; use `pip install -e .` from a clone
 canon init                     # scaffold canonmark.toml + a docs/ convention
 canon audit docs/              # audit authority metadata; non-zero exit on conflicts
 ```
@@ -103,10 +103,15 @@ reference project canonmark was extracted from runs a large Chinese doc library.
 
 ## Status
 
-**Early development (P0).** Foundations first: extract the auditor from its origin
-project, parameterize it, and make canonmark audit its own docs. Public release is
-deliberately the last step and is left to a human decision — this repo will not
-publish itself.
+**Early development — P0–P4 complete and independently verified.** The auditor has
+been extracted from its origin project and fully parameterized (default output is
+byte-identical to the original), 42 tests pass, invalid/valid fixtures form a
+two-way oracle, and canonmark audits its own docs via pre-commit and CI.
+
+Not yet published to PyPI or GitHub. Public release is deliberately the last step
+and is left to a human decision — this repo will not publish itself. See
+[docs/acceptance.md](docs/acceptance.md) for the verification matrix and
+[docs/progress.md](docs/progress.md) for the current state.
 
 ## License
 
