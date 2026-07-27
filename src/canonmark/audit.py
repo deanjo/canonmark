@@ -166,10 +166,20 @@ def iter_governed_directories(
       yield current_path
 
 
+def starts_frontmatter(first_line: str) -> bool:
+  """首行是否是 frontmatter 起始分隔符。
+
+  统一入口：BOM 必须先剥掉，否则带 BOM 的文档会被判成「没有 frontmatter」。
+  这条判定散落在三处，此前修 BOM 时只改了两处、漏掉第三处——所以收敛成一个
+  函数，让「改一处漏一处」在结构上不可能发生。
+  """
+  return first_line.lstrip("\ufeff").strip() == "---"
+
+
 def parse_frontmatter(path: Path) -> Frontmatter:
   """用 PyYAML 解析顶部 frontmatter，并拒绝重复一级字段。"""
   lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-  if not lines or lines[0].lstrip("\ufeff").strip() != "---":
+  if not lines or not starts_frontmatter(lines[0]):
     return Frontmatter(
         {}, {}, None, "缺少顶部 YAML frontmatter", 1, absent=True
     )
@@ -356,7 +366,7 @@ def first_document_h1(text: str) -> str:
   """只读取首个 H1，避免用普通正文里的术语推断技术方案类型。"""
   lines = text.splitlines()
   body_start = 0
-  if lines and lines[0].strip() == "---":
+  if lines and starts_frontmatter(lines[0]):
     closing_index = next(
         (
             index
@@ -560,7 +570,7 @@ def has_key_document_title(
   config = _cfg(config)
   lines = text.splitlines()
   body_start = 0
-  if lines and lines[0].strip() == "---":
+  if lines and starts_frontmatter(lines[0]):
     closing_index = next(
         (
             index
@@ -606,7 +616,7 @@ def has_key_document_title(
 def frontmatter_declares_field(text: str, field_name: str) -> bool:
   """仅用于关键文档识别；字段值仍必须由 PyYAML 校验。"""
   lines = text.splitlines()
-  if not lines or lines[0].lstrip("\ufeff").strip() != "---":
+  if not lines or not starts_frontmatter(lines[0]):
     return False
   field_pattern = re.compile(rf"^{re.escape(field_name)}\s*:")
   for line in lines[1:]:
@@ -986,7 +996,7 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     lines = text.splitlines()
     if (
         lines
-        and lines[0].strip() == "---"
+        and starts_frontmatter(lines[0])
         and frontmatter.error is not None
     ):
       malformed_frontmatter_documents.add(path)

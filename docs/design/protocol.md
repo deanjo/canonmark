@@ -148,6 +148,18 @@ superseded_by ─▶ status ─▶ not_for ─▶ applies_when ─▶ current_au
 - **`current + background-reference` 合法**:表示「当前维护但只作说明、不主导」的入口文档(canonmark 自己的 `vision.md` 就是这个组合)。
 - 冲突组合举例:`status: archive` + `current_authority: contract-current`(归档文档不能当现行契约)→ `METADATA_CONFLICT`;`status: superseded` + `superseded_by: []`(自称被取代却不指出取代者)→ `METADATA_CONFLICT`。
 
+### 4.1 与写作端 skill 的关系(单一事实源在本节)
+
+canonmark 是**检查端**。与之配套的**写作端**是 `technical-plan-sharding` skill(本机 Codex 全局 skill),它指导如何写出 Roadmap 入口 / 契约分片 / 任务分片 / 验收矩阵——正好对应本协议的四个 `*-current` 角色。两者同源:该 skill §1.5 的 frontmatter 模板是本协议 8 字段中的 6 个(缺 `owner` / `last_reviewed`),§6 的验收五值枚举与 `acceptance.md` 的判定五态一字不差。
+
+**分工**:skill 管「怎么写出合规文档」(靠自觉),canonmark 管「写完了机器验一遍」(靠门禁)。**词汇表与合法矩阵以本节为单一事实源**,写作端引用而非复制——否则加字段、改矩阵要改两处,迟早漂移。
+
+**已知冲突(待裁决,记录在此以免被遗忘)**:skill §1.5 规定「`background-reference` 只能配 `status: background`」,而本节允许 `current + background-reference`。两者不能同时成立,且按 skill 的规则,canonmark 自己的 `vision.md` 是非法文档。
+
+本协议的立场与理由:`status` 表示**生命周期**(还在维护吗),`current_authority` 表示**能主导什么**,这是两个正交维度。强行绑定会丢掉「当前维护但不主导」这种常见形态的表达力——`vision.md` 正是此类:它在维护中(不是背景、更不是过期),但不该主导实现。若按 skill 的规则把它标成 `status: background`,反而与事实不符。
+
+裁决前双方都不得单方面改动;这条冲突本身就是本项目要消灭的形态(两份权威对同一件事给出相反规定),而且**canonmark 检查不到它**——它只校验自己配置内的一致性,不知道 skill 的存在。这是一条真实的能力边界,见 `acceptance.md`「未验证范围」。
+
 ## 5. fail-closed 语义:缺字段 / 矛盾时怎么办
 
 协议的默认立场是保守关闭——**未证明适用,就不授予权威**。分两类标记:
@@ -244,6 +256,8 @@ superseded_by ─▶ status ─▶ not_for ─▶ applies_when ─▶ current_au
 
 **实现状态:已实现**(`src/canonmark/read.py`,CLI `canon read`,MCP 工具 `canon_read`)。上表五行逐行有测试守住,其中最要紧的一条是「作废文档的正文一个字都不出现在输出里」——用哨兵串断言,不是靠人肉检查。
 
+**路径边界按调用方分层**(同名能力两层行为不同,必须写进契约):MCP 层**拒绝 docs 树外的路径**——那是给 agent 的接口,不设边界时它就是一个不受限的任意文件读取器,当 agent 被配置成只给 canonmark 工具时那是条现成的绕过路径;CLI 层**不设这条边界**——人手动跑 `canon read` 时知道自己在读什么,强行限制会让它没法用于仓库外的文档。判定在 `resolve()` 之后进行,符号链接逃逸无效。
+
 **能判什么、不能判什么**:上表按 `status` / `superseded_by` 过滤,这些是客观事实,机器可判。但第 3/4 步(`not_for` / `applies_when` 是否命中「当前任务」)是语义判断,`canon_read` **不假装能做**——它不知道调用方在干什么。改为把这两个字段随正文一并交出,由调用方自己比对。假装能匹配比不匹配更危险:一次错误的「不适用」会让 agent 跳过真正该读的文档。
 
 正文交付时会剥掉 frontmatter:那些字段已在头部摘要里给过,再随正文附一遍等于把同样的字节收两次费,与「零额外上下文开销」的主张相悖。
@@ -256,7 +270,12 @@ superseded_by ─▶ status ─▶ not_for ─▶ applies_when ─▶ current_au
 
 **实现状态:已实现**(`src/canonmark/index.py`,CLI `canon index --dir/--current-only/--json`,MCP 工具 `canon_index`)。紧凑性由两条断言守住:一条是本节的原始判据(真实体量下索引 < 全文的 10%),另一条更本质——**索引大小不随正文变长而增长**,只与篇数有关;后者在任何规模下都成立,前者在文档很短时会失真。
 
-第三条约束(不得写成必经路径)现在也是**机检**的:测试断言 MCP 工具描述里必须含「不要在每次读文档前调用」,且不得出现「先执行/先跑/先运行 canon index」这类话术。早期设计曾把全库索引当默认路径并已废止,把废止决定交给人的记性守不住,所以交给测试。
+第三条约束(不得写成必经路径)现在也是**机检**的,分两层:
+
+1. **强制原样**:MCP 工具描述必须以常量 `NOT_A_PREREQUISITE` 的原文结尾。之所以要求原样而非「含某几个关键词」——独立验收用 5 组变异测过关键词黑名单,4 组静默放过(「工作流的第一步就执行 canon index」「建议先跑canon index」去掉一个空格即可绕开)。自然语言的等价改写挡不住,统一措辞是可机检的前提。
+2. **黑名单兜底**:去空格后匹配若干「先…canon index」变体,覆盖描述、接线片段与宿主话术。
+
+**这道守卫挡得住什么、挡不住什么(如实记录)**:它保证禁令不被改写或删除,**不保证描述别处不出现相反指引**——验收实测,在禁令原样保留的前提下,前面增写「开始任何任务前请务必先调用本工具」仍会静默放过。增写这条路只能靠人工审阅。
 
 ### 7.6 README 与文档标签互检
 

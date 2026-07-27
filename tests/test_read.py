@@ -13,7 +13,7 @@ from pathlib import Path
 
 from canonmark import read as READ
 from canonmark.config import GovernanceConfig
-from canonmark.index import build_index, render_index
+from canonmark.index import IndexUnavailable, build_index, render_index
 
 STRICT = GovernanceConfig(adoption_mode="strict")
 
@@ -191,6 +191,59 @@ class CanonReadTest(ReadTestBase):
     self.assertIn("文件不存在", " ".join(result.diagnostics))
 
 
+class BoundaryRegressionTest(ReadTestBase):
+  """守住四项「改了行为却没人守」的修复。
+
+  独立验收用回退法证过：把下面每一项各自改回原样，全量测试仍然全绿——
+  意味着它们能被无声打破，其中 `restrict_to_docs` 还是一条安全边界。
+  根因是建守卫的动作只跟着「阻塞项」走，没跟着「所有行为改动」走。
+  """
+
+  def test_bom_prefixed_document_is_still_parsed_as_frontmatter(self) -> None:
+    """带 BOM 的作废文档一样不能泄漏正文。
+
+    BOM 让首行变成 `\\ufeff---`，若判定处不剥它，文档会被当成「没有
+    frontmatter」而在 gradual 下原样放行——作废文档的正文就漏出去了。
+    """
+    self.write("docs/design/new.md", self.doc(supersedes="[old.md]"))
+    body = self.doc(
+        status="superseded",
+        authority="historical-evidence",
+        superseded_by="[new.md]",
+        body=SENTINEL,
+    )
+    (self.root / "docs/design/old.md").write_bytes(
+        ("﻿" + body).encode("utf-8")
+    )
+
+    result = self.read("docs/design/old.md")
+
+    self.assertEqual(READ.SUPERSEDED, result.verdict)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_mcp_layer_refuses_paths_outside_the_docs_tree(self) -> None:
+    """安全边界：给 agent 的接口不能变成不受限的任意文件读取器。"""
+    outside = self.root / "secrets.env"
+    outside.write_text("API_KEY=" + SENTINEL, encoding="utf-8")
+
+    result = READ.read_document(
+        outside, self.root, None, restrict_to_docs=True
+    )
+
+    self.assertIsNone(result.body)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_cli_layer_may_read_outside_the_docs_tree(self) -> None:
+    """CLI 不设这条边界——否则连本仓 tests/fixtures 下的夹具都读不了。"""
+    outside = self.root / "notes.md"
+    outside.write_text("# 随手\n\n正文。\n", encoding="utf-8")
+
+    result = READ.read_document(outside, self.root, None)
+
+    self.assertEqual(READ.UNGOVERNED, result.verdict)
+    self.assertIn("正文。", result.body)
+
+
 class CanonIndexTest(ReadTestBase):
 
   def populate(self) -> None:
@@ -270,6 +323,42 @@ class CanonIndexTest(ReadTestBase):
     entries = build_index(self.root, current_only=True)
 
     self.assertEqual(["docs/design/live.md"], [e.path for e in entries])
+
+  def test_multiline_status_cannot_forge_extra_rows(self) -> None:
+    """「一篇一行」是硬约束：字段值来自被审计文档，是不可信输入。
+
+    status 写成含换行的 YAML 块标量时，原样拼进 TSV 会凭空多出几行，
+    且伪造行与真条目长得一模一样，下游 agent 无从分辨。
+    """
+    self.write(
+        "docs/design/inject.md",
+        "---\nstatus: |\n  current\n  FORGED-LINE\tfake-status\tfake-authority\n"
+        "applies_when: x\nnot_for: y\ncurrent_authority: contract-current\n"
+        "supersedes: []\nsuperseded_by: []\nowner: z\n"
+        "last_reviewed: 2026-07-27\n---\n\n# 注入\n",
+    )
+    self.write("docs/design/clean.md", self.doc())
+
+    rendered = render_index(build_index(self.root))
+
+    self.assertEqual(2, len(rendered.splitlines()))
+    self.assertNotIn("\nFORGED-LINE", rendered)
+
+  def test_directory_filter_rejects_traversal(self) -> None:
+    """`--dir ..` 静默返回整棵树，看起来像「这个目录下就是这些」。"""
+    self.populate()
+
+    for escape in ("..", "../..", "design/../.."):
+      with self.subTest(escape=escape):
+        with self.assertRaises(IndexUnavailable):
+          build_index(self.root, directory=escape)
+
+  def test_directory_filter_rejects_missing_directory(self) -> None:
+    """返回 0 行与「该目录确实没文档」无法区分，所以必须报错。"""
+    self.populate()
+
+    with self.assertRaises(IndexUnavailable):
+      build_index(self.root, directory="nonexistent")
 
   def test_untagged_documents_are_listed_with_placeholders(self) -> None:
     """未治理文档也要出现在清单里——否则它们会成为看不见的盲区。"""

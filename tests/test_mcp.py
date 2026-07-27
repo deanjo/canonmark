@@ -237,8 +237,10 @@ class WiringPhrasingTest(unittest.TestCase):
   def test_no_prerequisite_phrasing_anywhere_in_the_wiring(self) -> None:
     """关键词黑名单：抓得住直白的说法，抓不住语义等价的改写。
 
-    **这道检查的局限必须写明**——它是第二道网，不是保证。真正的保证来自上一条
-    （禁令原样固定）。把「先…canon index」的空格去掉再匹配，堵掉最省事的绕法。
+    **这道检查的局限必须写明**——它是第二道网，不是保证。上一条（禁令原样固定）
+    保证的是禁令**不被改写或删除**，但**挡不住增写**：验收实测，在禁令原样保留的
+    前提下，前面加一句「开始任何任务前请务必先调用本工具」仍会静默放过。增写这条
+    路只能靠人工审阅。这里把「先…canon index」的空格去掉再匹配，堵掉最省事的绕法。
     """
     haystacks = {
         "INDEX_DESCRIPTION": MCP.INDEX_DESCRIPTION,

@@ -24,7 +24,7 @@ last_reviewed: 2026-07-27
 | A4 | P2 | src 无 agong 专属依赖 | `grep -ri` src/ | 仅注释/默认配置值,无代码依赖 | 命中全在注释/config 默认值 | PASS |
 | A5 | P2 | 纯标准库 + 可选 PyYAML 可跑 | `pip install -e . && canon --help` | 退出码 0 | canon/audit --help exit 0 | PASS |
 | A6 | P3 | canonmark 自审自身全 PASS | `canon audit docs/ --config canonmark.toml` | 全部 gate PASS,exit 0 | 全门 PASS,exit 0(门数随阶段增加,以命令输出为准) | PASS |
-| A7 | P3 | pre-commit + CI 各真跑绿一次 | 本地 hook 触发 + CI pipeline | 两条路均绿 | 本地 pre-commit `Passed` exit 0;远端 CI 待推送后验 | PASS(本地) |
+| A7 | P3 | pre-commit + CI 各真跑绿一次 | `pre-commit run --all-files` + CI pipeline | 两条路均绿 | 本地 `Passed` exit 0，**但有两个未写出的前提**：`.git/hooks/pre-commit` 并未安装（需 `pre-commit install`），且 `canon` 不在系统 PATH 上（需把 venv 的 bin 加进 PATH，否则报 `Executable canon not found`）。**所以「本地提交会自动挡住脏文档」在当前 checkout 上并不成立**——跑得通的是手动触发那条路。远端 CI 无 remote，从未跑过 | PASS(手动触发) |
 | A8 | P4 | INVALID fixture 精确报中 6 处埋雷 | `pytest tests/test_fixtures.py` | 恰好 6 类问题 | **P5 曾无声打破此项**(fixture 不被任何测试引用,gradual 把其中 2 处埋雷降级为提示),独立验收查出;修法:fixture 配置声明 `adoption_mode = "strict"`,并新建 `tests/test_fixtures.py` 把双向 oracle 接进 pytest,不再依赖人工跑 CLI | PASS |
 | A9 | P4 | VALID fixture 一处不报 | `pytest tests/test_fixtures.py` | 无 issue 亦无 notice | **P5 曾无声打破此项**:valid fixture 里 `old-notes.md` 声称被 `replacement.md` 取代而对方未认领——正是项目文档记载的「自家后院的单边声明」,T10 上线后被抓出。已给 `replacement.md` 补 `supersedes`,该现行犯就此归案 | PASS |
 | A10 | P4 | 改配置不改代码即换项目 | 同 fixture,两份 config 翻转口径 | 结果翻转,.py 零改动 | A3 md5 佐证 .py 未改 | PASS |
@@ -36,7 +36,7 @@ last_reviewed: 2026-07-27
 | A20 | P5 | 存量项目装上不当场变红(渐进采用) | 对零 frontmatter 的老项目跑 `canon audit` | 无任何 gate FAIL,**exit 0**,提示指路 | 4 篇文档零标签的老项目:全 PASS + 6 条提示,exit 0 | PASS |
 | A21 | P5 | 贴第一张作废标签不触发连锁强制 | 旧文档声明被未治理的新文档取代 | 不判失败,只提示补标签 | V5 降级为「替代目标尚未纳入治理」提示,exit 0 | PASS |
 | A22 | P5 | strict 模式下结构性缺失照旧判失败 | `pytest tests/ -k strict_still_fails` | 缺 frontmatter / 缺导航均 FAIL | 全绿;canonmark 自身 strict 全门 PASS | PASS |
-| A17 | P6 | `canon_read` 对作废文档不返回正文 | `pytest tests/test_read.py tests/test_mcp.py` | 返回替代目标,**正文不出现在输出中** | 哨兵串断言:CLI 层与 MCP 工具调用层双双不泄漏正文;另断言输出长度**不随文档变长而增长**(17,484 字节的作废文档 → 189 字节输出,省 98.9%) | INSUFFICIENT_EVIDENCE |
+| A17 | P6 | `canon_read` 对作废文档不返回正文 | `pytest tests/test_read.py tests/test_mcp.py` | 返回替代目标,**正文不出现在输出中** | 哨兵串断言:CLI 层与 MCP 工具调用层双双不泄漏正文;另断言输出长度**不随文档变长而增长**(测试把同一篇作废文档撑长两千行,输出字节数一字不变) | INSUFFICIENT_EVIDENCE |
 | A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例 | INSUFFICIENT_EVIDENCE |
 | A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 见下「A19 对照实验记录」 | 答案取自现行文档,非作废文档 | **四组实测,结论与预期不同**:标签的价值成立(无标签组只能推理并明确要求人确认),但 `canon_read` 的**增量**价值在本实验规模下未体现——有标签组不用工具也答对了。详见下节,含实验设计缺陷的自陈 | INSUFFICIENT_EVIDENCE |
 | A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P7 | PENDING |
@@ -70,7 +70,11 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 
 原因是我的实验夹具太小:只有 7 篇文档,A 组把全部读了一遍,旧文档不过几百字节,读进去几乎不要钱。真实项目里 AI 不会通读 docs,而设计文档动辄几十 KB。
 
-可量化的那部分增量是上下文开销:把同一篇作废文档撑到 17,484 字节(真实设计文档量级),直接读进上下文是 17,484 字节,`canon_read` 是 **189 字节,省 98.9%**,且**输出长度不随文档变长而增长**(有断言守住)。这一条是确定的;至于「省下的上下文是否换来更好的答案」,本实验没有验证。
+可量化的那部分增量是上下文开销:直接读一篇作废文档,进上下文的是它的**全长**;`canon_read` 给出的是固定几行,且**输出长度不随文档变长而增长**——测试把同一篇撑长两千行,输出字节数一字不变(`test_superseded_output_does_not_grow_with_document_length`)。真实设计文档动辄几十 KB,差距是两个数量级。
+
+这里刻意不写具体字节数:此前写过一组「17,484 → 189」,但那个 17,484 字节的输入是临时撑出来的、没进仓库,读者复现不了——**一个复现不了的数字,和一个错数字，对读者是一回事**。要看实际比例,跑上面那条测试或对自己的文档跑 `canon read`。
+
+这一条是确定的;至于「省下的上下文是否换来更好的答案」,本实验没有验证。
 
 ### 实验设计的缺陷(自陈)
 
@@ -82,6 +86,9 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 ## 未验证范围(诚实边界)
 
 - GitHub 远程发布(A12 之后)不由 agent 执行,留用户拍板。
+- **本地 pre-commit 钩子未安装**:`.pre-commit-config.yaml` 写好了、手动 `pre-commit run` 也绿,但 `.git/hooks/pre-commit` 不存在,且 `canon` 不在系统 PATH 上。即「自动挡住脏文档」这条负反馈回路在当前 checkout 上是断的,需要 `pre-commit install` 加把 venv 的 bin 放进 PATH 才闭合。
+- **Python 版本**:`pyproject.toml` 声明 `>=3.9`,但 CI 只跑 3.11、本地是 3.14,3.9/3.10 从未实测。
+- **写作端 skill 与本协议的 `background-reference` 映射冲突未裁决**,见 `design/protocol.md` §4.1。canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。
 - Windows 首跑(CRLF/BOM/反斜杠路径)第一版不覆盖,列入风险。
 - agong_server 侧的实际接入(换用 canonmark + 写 agong 配置)不在本项目范围,是 agong 侧后续。
 - **已知边界(P5 独立验收发现,未修)**:`Frontmatter.absent` 按「首行是不是 `---`」判定,因此一篇以 Markdown 水平线 `---` 开头的存量文档会被当作「已贴标签」,在 `gradual` 下照旧判失败,与渐进采用的承诺相悖。场景窄但真实。修法需权衡——若改成「找不到闭合 `---` 就视为没有 frontmatter」,则「真写了标签却忘了闭合」会被降级为提示,可能放过真错误。留待拍板。

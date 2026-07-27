@@ -98,6 +98,13 @@ gate. So you can adopt one document at a time — tagging a stale design doc wit
 "superseded by v2" is a complete, useful step by itself, and it will not force
 you to go tag v2 and everything v2 points at.
 
+One known exception, so the promise above stays honest: a document whose **very
+first line is a `---` horizontal rule** (or one carrying a UTF-8 BOM before it)
+is read as "has frontmatter but left it unterminated" rather than "has none," and
+that does fail the gate. Narrow, but real — see the "未验证范围" section of
+[docs/acceptance.md](docs/acceptance.md) for why the fix is a trade-off rather
+than an oversight.
+
 Once a doc library is fully governed, switch it on properly with
 `adoption_mode = "strict"` in `canonmark.toml`, and structural gaps fail again
 (that is how canonmark audits itself).
