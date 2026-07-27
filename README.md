@@ -77,13 +77,57 @@ doc to trust.**
 
 ```bash
 pip install canonmark          # not published yet; use `pip install -e .` from a clone
-canon init                     # scaffold canonmark.toml + a docs/ convention
+canon init                     # scaffold canonmark.toml + print the MCP wiring
 canon audit docs/              # audit authority metadata; non-zero exit on conflicts
+canon read docs/design/x.md    # read a doc through the contract (see below)
+canon index --current-only     # compact label listing; on demand, never a prerequisite
+canon mcp                      # run as an MCP server so agents get canon_read as a tool
 ```
 
 `canon audit` parses only the frontmatter of each key doc, checks it against the
 authority contract, and reports every `INSUFFICIENT_METADATA` / `METADATA_CONFLICT`
 with a file path — ready to wire into pre-commit and CI.
+
+### It won't turn your existing repo red on day one
+
+Point canonmark at a years-old `docs/` where nothing has frontmatter yet and it
+exits **0**. The rule is: **what you haven't done isn't a failure; what you did
+wrong is.** Untagged docs and missing navigation are reported as notices that
+point the way; only documents that *do* carry a label and get it wrong fail the
+gate. So you can adopt one document at a time — tagging a stale design doc with
+"superseded by v2" is a complete, useful step by itself, and it will not force
+you to go tag v2 and everything v2 points at.
+
+Once a doc library is fully governed, switch it on properly with
+`adoption_mode = "strict"` in `canonmark.toml`, and structural gaps fail again
+(that is how canonmark audits itself).
+
+### Filtering happens before the agent sees the text
+
+A label only helps if something acts on it. `canon_read` is the thing that acts:
+point it at a retired doc and **the body is not returned at all** — you get its
+status and where to go instead.
+
+```
+$ canon read docs/design/rate-limit.md
+docs/design/rate-limit.md — 已作废（status: superseded）
+本文档不再有效，正文按权威契约不予返回。
+请改读以下现行文档：
+  - docs/design/rate-limit-v2.md
+```
+
+Run `canon init` and it prints an `.mcp.json` snippet plus one line for your
+`CLAUDE.md`/`AGENTS.md`. After that `canon_read` shows up in the agent's tool list
+on every start — the capability lives in the tool surface, not in a convention the
+agent has to read a document to discover.
+
+The honest limit: this is filtering, not enforcement. The tool is in the list and
+its description says "use this instead of reading files directly," but an agent can
+still reach for its built-in file reader. Hard enforcement would need a host-side
+hook that intercepts reads under `docs/`, which is outside this tool's scope.
+
+What it does buy you, mechanically: a retired doc's body never enters the context
+window, so it cannot be the thing the agent pattern-matches against later.
 
 ## Works with CJK docs
 
@@ -95,7 +139,7 @@ reference project canonmark was extracted from runs a large Chinese doc library.
 
 ## Docs
 
-- [Roadmap](docs/roadmap.md) — the six phases (P0–P5) and what's built when.
+- [Roadmap](docs/roadmap.md) — the eight phases (P0–P7) and what's built when.
 - [Vision](docs/design/vision.md) — the problem, the value, and where canonmark
   differs from adjacent projects.
 - [Protocol](docs/design/protocol.md) — the 8-field contract and the five-step
@@ -103,10 +147,23 @@ reference project canonmark was extracted from runs a large Chinese doc library.
 
 ## Status
 
-**Early development — P0–P4 complete and independently verified.** The auditor has
-been extracted from its origin project and fully parameterized (default output is
-byte-identical to the original), 42 tests pass, invalid/valid fixtures form a
-two-way oracle, and canonmark audits its own docs via pre-commit and CI.
+**Early development — P0–P5 complete and independently verified; P6 implemented,
+awaiting independent verification.** The auditor has been extracted from its origin
+project and fully parameterized (default output is byte-identical to the original),
+invalid/valid fixtures form a two-way oracle, and canonmark audits its own docs via
+pre-commit and CI. P5 added the anti-rot checks — supersession pointers must be
+symmetric, navigation must not list retired documents — plus the gradual adoption
+mode described above. The suite passes green, including a two-way fixture oracle
+wired into it, and the migrated tests keep their assertions unchanged — though the
+supersession symmetry check is a breaking change: one fixture had to be corrected
+because it contained a genuine one-sided declaration the new check now catches.
+
+P6 added the reading path: `canon read` (contract-filtered delivery), `canon index`
+(compact listing), and `canon mcp` (an MCP server, hand-written over stdio JSON-RPC
+so the zero-dependency promise holds). A controlled experiment on the labelling
+question is written up in [docs/acceptance.md](docs/acceptance.md) — including the
+part it failed to show, which is that `canon_read`'s benefit *over labels alone*
+remains unproven at the scale tested.
 
 Not yet published to PyPI or GitHub. Public release is deliberately the last step
 and is left to a human decision — this repo will not publish itself. See

@@ -8,6 +8,10 @@
 # acceptance-current/background-reference/historical-evidence）。这套词汇表是治理
 # 模型的固定部分，不是项目品牌，canonmark 直接沿用，不覆盖。
 
+# 采用模式：canonmark 自己的 docs 已完成治理，缺 frontmatter / 缺导航一律判失败。
+# 存量项目请留用默认的 gradual——那边「还没贴标签」是常态，不是过错。
+adoption_mode = "strict"
+
 # docs 根目录名。
 docs_root = "docs"
 

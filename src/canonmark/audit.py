@@ -1,15 +1,18 @@
-"""canonmark 只读文档审计器（五门）。
+"""canonmark 只读文档审计器。
 
 从 agong ``docs-audit.py`` 抽取而来。所有原来读模块级项目常量的地方，
 都改成读传入的 :class:`~canonmark.config.GovernanceConfig`；未显式传 config 时
-回退到 :data:`~canonmark.config.DEFAULT_CONFIG`（= agong 现值，零漂移）。
+回退到 :data:`~canonmark.config.DEFAULT_CONFIG`。
 
-五门：
+各门（权威清单是 :data:`SUPPORTED_GATES`，本表由测试守住不许与之漂移）：
   V2  目录命名（kebab-case + 白名单 + archive 历史豁免）
   V4  含 ≥2 文件的非纯资产目录必须有 README
   V5  关键文档 frontmatter 契约（本模块最大的一块）
   V9  总导航必须链接全部正式顶层目录
   V10 活文档相对链接与 docs/...:line 引用不得断
+  V11 防腐烂：导航与标签互检判失败；久未复核与孤儿文档只提示
+
+判失败与只提示的分界见 :meth:`GateResult.notice` 与 ``config.adoption_mode``。
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ else:
   YAML_IMPORT_ERROR = None
 
 
-SUPPORTED_GATES = ("V2", "V4", "V5", "V9", "V10")
+SUPPORTED_GATES = ("V2", "V4", "V5", "V9", "V10", "V11")
 # Markdown 结构性正则（与项目无关，保持模块常量）。
 REFERENCE_DEFINITION_RE = re.compile(
     r"^\s{0,3}\[[^\]]+\]:\s*(<[^>]+>|[^\s]+)"
@@ -67,10 +70,21 @@ class GateResult:
   anchor: str
   checked: str
   issues: list[Issue] = field(default_factory=list)
+  notices: list[Issue] = field(default_factory=list)
 
   def add(self, path: Path | str, line: int, message: str, root: Path) -> None:
     """加入问题，并统一输出仓库相对路径。"""
     self.issues.append(
+        Issue(display_path(path, root), max(1, line), message)
+    )
+
+  def notice(self, path: Path | str, line: int, message: str, root: Path) -> None:
+    """加入提示：会打印，但不判失败、不影响退出码。
+
+    用于「本可以更好，但现在这样不算错」的情况：未纳入治理的文档、
+    超期未复核、孤儿文档。判失败会促使团队关掉整个门禁，与目的相反。
+    """
+    self.notices.append(
         Issue(display_path(path, root), max(1, line), message)
     )
 
@@ -84,6 +98,9 @@ class Frontmatter:
   closing_line: int | None
   error: str | None
   error_line: int | None = None
+  # 完全没有 frontmatter（首行不是 ---）。区别于「写了但写错」：
+  # 前者是「尚未纳入治理」，后者是「已纳入但有错」，两者在 gradual 模式下待遇不同。
+  absent: bool = False
 
 
 def display_path(path: Path | str, root: Path) -> str:
@@ -152,8 +169,10 @@ def iter_governed_directories(
 def parse_frontmatter(path: Path) -> Frontmatter:
   """用 PyYAML 解析顶部 frontmatter，并拒绝重复一级字段。"""
   lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-  if not lines or lines[0].strip() != "---":
-    return Frontmatter({}, {}, None, "缺少顶部 YAML frontmatter", 1)
+  if not lines or lines[0].lstrip("\ufeff").strip() != "---":
+    return Frontmatter(
+        {}, {}, None, "缺少顶部 YAML frontmatter", 1, absent=True
+    )
 
   closing_index = next(
       (index for index in range(1, len(lines)) if lines[index].strip() == "---"),
@@ -428,6 +447,49 @@ def resolve_superseded_target(
   return candidate
 
 
+def suggest_supersession_path(
+    source: Path, target_value: str, docs_dir: Path
+) -> str:
+  """目标写错时给出可直接照抄的写法。
+
+  两种口径都合法（同目录相对 / 以 docs 根开头），报错只说「不存在」等于让人猜。
+  按文件名在 docs 下找；唯一命中才建议，多个同名时不猜。
+  """
+  name = Path(target_value.strip()).name
+  if not name:
+    return ""
+  matches = [item for item in docs_dir.rglob(name) if item.is_file()]
+  if len(matches) != 1:
+    return ""
+  relative = os.path.relpath(matches[0], source.parent)
+  return f"；是否想写 {Path(relative).as_posix()}"
+
+
+def declares_pointer(
+    source: Path,
+    expected: Path,
+    field_name: str,
+    root: Path,
+    docs_dir: Path,
+    config: GovernanceConfig | None = None,
+) -> bool:
+  """source 的 field_name 列表是否指向 expected（按解析后的真实路径比对）。
+
+  两端可以各用一种路径口径（同目录相对 / 以 docs 根开头），故不能比字面量。
+  """
+  values = parse_frontmatter(source).values.get(field_name)
+  if not isinstance(values, list):
+    return False
+  target = expected.resolve()
+  for value in values:
+    if not isinstance(value, str) or not value.strip():
+      continue
+    resolved = resolve_superseded_target(source, value, root, docs_dir, config)
+    if resolved is not None and resolved == target:
+      return True
+  return False
+
+
 def superseded_targets(
     source: Path, root: Path, docs_dir: Path, config: GovernanceConfig | None = None
 ) -> list[Path]:
@@ -544,7 +606,7 @@ def has_key_document_title(
 def frontmatter_declares_field(text: str, field_name: str) -> bool:
   """仅用于关键文档识别；字段值仍必须由 PyYAML 校验。"""
   lines = text.splitlines()
-  if not lines or lines[0].strip() != "---":
+  if not lines or lines[0].lstrip("\ufeff").strip() != "---":
     return False
   field_pattern = re.compile(rf"^{re.escape(field_name)}\s*:")
   for line in lines[1:]:
@@ -840,7 +902,11 @@ def audit_v2(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     if relative in path_exceptions:
       continue
     if not config.directory_name_re.fullmatch(directory.name):
-      result.add(
+      # gradual：既有目录名只提示。存量项目的 `API_Reference`、`user_guide`
+      # 是既成事实，不是这次治理做错的事；改名要连带改掉所有指向它的链接，
+      # 绝不是「装上第一天」能做的。判失败只会让人把整个门禁关掉。
+      report = result.notice if config.is_gradual else result.add
+      report(
           directory,
           1,
           f"目录名不是 {config.directory_name_label}；{exemption_clause}",
@@ -867,7 +933,10 @@ def audit_v4(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       continue
     candidates += 1
     if not (directory / "README.md").is_file():
-      result.add(
+      # gradual：从没建过导航的目录只提示。要求存量项目先重建整个 docs 结构
+      # 才肯放行，等于把门槛前置到尚未产生任何价值的时刻。
+      report = result.notice if config.is_gradual else result.add
+      report(
           directory,
           1,
           f"直接含 {len(direct_files)} 个文件且包含 Markdown，缺少 README.md",
@@ -933,6 +1002,17 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       continue
     frontmatter = parse_frontmatter(path)
     if frontmatter.error:
+      # gradual：从未贴过标签的文档只提示不判失败——那是「尚未纳入治理」，
+      # 不是过错。显式列入 required_key_documents 的除外：那是项目自己声明
+      # 「这几篇必须治理」，缺标签就是没兑现声明。
+      if config.is_gradual and frontmatter.absent and path not in required:
+        result.notice(
+            path,
+            1,
+            "未纳入治理：无 frontmatter，本次跳过；贴上标签即开始受治理",
+            root,
+        )
+        continue
       requirement = (
           f"；必需字段：{', '.join(required_fields)}"
           if path in key_documents
@@ -1023,6 +1103,60 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
             item_error,
             root,
         )
+
+    # T10 的另一半方向（protocol §2 明文举例的那一半）：本文档声称取代了谁，
+    # 对方就必须承认自己已被取代。这一半更危险——漏掉时旧文档会继续自称
+    # current，两篇文档同时以现行权威示人，正是本项目要防的核心故障。
+    claimed = frontmatter.values.get("supersedes")
+    if isinstance(claimed, list):
+      for claimed_value in claimed:
+        if not isinstance(claimed_value, str) or not claimed_value.strip():
+          continue
+        old = resolve_superseded_target(
+            path, claimed_value, root, docs_dir, config
+        )
+        if old is None or not old.is_file():
+          result.add(
+              path,
+              frontmatter.fields["supersedes"],
+              f"supersedes 目标不存在：{claimed_value}"
+              f"{suggest_supersession_path(path, claimed_value, docs_dir)}",
+              root,
+          )
+          continue
+        if old.name.casefold() == "readme.md":
+          continue
+        old_frontmatter = parse_frontmatter(old)
+        if config.is_gradual and old_frontmatter.absent:
+          result.notice(
+              path,
+              frontmatter.fields["supersedes"],
+              f"被取代方尚未纳入治理：{claimed_value}；"
+              "给它贴上标签并写明 superseded_by 后，替代关系才能被完整校验",
+              root,
+          )
+          continue
+        if not declares_pointer(
+            old, path, "superseded_by", root, docs_dir, config
+        ):
+          # 指导必须一步到位：只说改 status，照做会立刻撞上 §4 矩阵
+          # （superseded 不允许配 *-current），等于把人骗进第二轮报错。
+          allowed = sorted(
+              config.status_authority_matrix.get("superseded", ())
+          )
+          authority_hint = (
+              f"、current_authority: {allowed[0]}" if len(allowed) == 1 else ""
+          )
+          result.add(
+              path,
+              frontmatter.fields["supersedes"],
+              f"替代关系是单边声明：本文档声称取代 {claimed_value}，"
+              f"但对方未声明已被本文档取代"
+              f"（应在 {display_path(old, root)} 中写 status: superseded"
+              f"{authority_hint}，并把"
+              f" {os.path.relpath(path, old.parent)} 加入 superseded_by）",
+              root,
+          )
     if (
         status in config.allowed_statuses
         and authority in config.allowed_authorities
@@ -1070,6 +1204,11 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       )
     superseded_by = frontmatter.values.get("superseded_by")
     if isinstance(superseded_by, list):
+      cycle = superseded_cycle(path, root, docs_dir, config)
+      # 对称性检查的前提是这条替代声明本身有效：status=current 时它已被判矛盾，
+      # 成环时「让对方认领本文档」会把环越缠越紧。两种情况下都跳过 T10，
+      # 由各自的专属报错负责，避免给出会把事情弄得更糟的修复建议。
+      symmetry_applicable = status != "current" and cycle is None
       for target_value in superseded_by:
         if not isinstance(target_value, str) or not target_value.strip():
           continue
@@ -1087,7 +1226,10 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
           result.add(
               path,
               frontmatter.fields["superseded_by"],
-              f"superseded_by 目标不存在：{target_value}",
+              f"superseded_by 目标不存在：{target_value}"
+              f"（按同目录解析为 {display_path(target, root)}；"
+              f"也可写成以 {config.docs_root}/ 开头的仓库根路径"
+              f"{suggest_supersession_path(path, target_value, docs_dir)}）",
               root,
           )
         elif target.name.casefold() != "readme.md":
@@ -1103,14 +1245,38 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
                 if target_frontmatter.error
                 else f"缺字段：{', '.join(target_missing)}"
             )
+            # gradual：目标还没贴标签时只提示。否则「给旧文档贴一张作废标签」——
+            # 恰恰是最该做、收益最高的第一步——会强制连锁治理它指向的每一篇文档。
+            if config.is_gradual and target_frontmatter.absent:
+              result.notice(
+                  path,
+                  frontmatter.fields["superseded_by"],
+                  f"替代目标尚未纳入治理：{target_value}；"
+                  "给它也贴上标签后，替代关系才能被完整校验",
+                  root,
+              )
+            else:
+              result.add(
+                  path,
+                  frontmatter.fields["superseded_by"],
+                  "superseded_by 非 README 目标无法执行五步门禁："
+                  f"{target_value}（{detail}）",
+                  root,
+              )
+          elif symmetry_applicable and not declares_pointer(
+              target, path, "supersedes", root, docs_dir, config
+          ):
+            # T10 反向指针对称：单边声明是最难自查的一类腐烂——旧文档自称退位，
+            # 新文档从不知情，读到新文档的人无从判断它是否真的接管了旧职责。
             result.add(
                 path,
                 frontmatter.fields["superseded_by"],
-                "superseded_by 非 README 目标无法执行五步门禁："
-                f"{target_value}（{detail}）",
+                f"替代关系是单边声明：本文档声明被 {target_value} 取代，"
+                f"但对方的 supersedes 未认领本文档"
+                f"（应在 {display_path(target, root)} 的 supersedes 中加入"
+                f" {os.path.relpath(path, target.parent)}）",
                 root,
             )
-      cycle = superseded_cycle(path, root, docs_dir, config)
       if cycle is not None:
         cycle_text = " -> ".join(
             (Path(config.docs_root) / item.relative_to(docs_dir.resolve())).as_posix()
@@ -1135,7 +1301,10 @@ def audit_v9(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       "V9", f"{config.docs_root}/README.md:1", "0 个正式顶层目录"
   )
   if not readme.is_file():
-    result.add(readme, 1, "总导航不存在", root)
+    # gradual：没有总导航说明项目还没打算用导航层，不强制它先造一个；
+    # 一旦存在，下面照常检查它是否漏链目录（有了就得对）。
+    report = result.notice if config.is_gradual else result.add
+    report(readme, 1, "总导航不存在", root)
     return result
 
   top_level_directories = sorted(
@@ -1169,7 +1338,11 @@ def audit_v9(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   for directory in formal:
     expected_readme = (directory / "README.md").resolve()
     if expected_readme not in linked_targets and directory.resolve() not in linked_targets:
-      result.add(
+      # gradual：漏链只提示。否则与 V4 直接打架——V4 刚说「这个目录的
+      # README 可以先不建」，V9 却要求总导航必须链接那个还不存在的文件，
+      # 结果是「有一个不完整的索引」（存量项目的典型形态）照样被打红。
+      report = result.notice if config.is_gradual else result.add
+      report(
           readme,
           1,
           f"未导航正式顶层目录 {config.docs_root}/{directory.name}/；"
@@ -1217,9 +1390,15 @@ def audit_relative_links(
     result: GateResult,
     root: Path,
     line_count_cache: dict[Path, int],
+    governed: bool = True,
 ) -> int:
-  """检查 Markdown/HTML 相对链接及行号 fragment，返回链接数量。"""
+  """检查 Markdown/HTML 相对链接及行号 fragment，返回链接数量。
+
+  ``governed=False``（未贴标签的文档）时坏链降级为提示：存量坏链不是这次
+  治理造成的，而贴过标签的文档必须为自己的链接负责。
+  """
   link_count = 0
+  report = result.add if governed else result.notice
   for line_number, destination in iter_v10_links(text):
     link_parts = relative_link_parts(destination)
     if link_parts is None:
@@ -1231,7 +1410,7 @@ def audit_relative_links(
       link_count += 1
       target = (source.parent / relative).resolve()
     if not target.exists():
-      result.add(
+      report(
           source,
           line_number,
           f"相对链接目标不存在：{destination} "
@@ -1243,7 +1422,7 @@ def audit_relative_links(
         target, fragment, line_count_cache
     )
     if fragment_issue:
-      result.add(
+      report(
           source,
           line_number,
           f"相对链接 {fragment_issue}：{destination}",
@@ -1330,8 +1509,10 @@ def audit_v10(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   line_reference_count = 0
   for source in sources:
     text = source.read_text(encoding="utf-8", errors="replace")
+    # 与 V5 同一口径：贴过标签的文档要为自己的链接负责，没贴的只提示。
+    governed = not config.is_gradual or not parse_frontmatter(source).absent
     link_count += audit_relative_links(
-        source, text, result, root, line_count_cache
+        source, text, result, root, line_count_cache, governed
     )
     line_reference_count += audit_docs_line_references(
         source, text, result, root, docs_dir, line_count_cache, config
@@ -1343,24 +1524,176 @@ def audit_v10(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   return result
 
 
+def document_status(path: Path) -> str:
+  """返回文档自身声明的 status（小写）；无 frontmatter 或未声明时返回空串。"""
+  value = parse_frontmatter(path).values.get("status")
+  return str(value).strip().casefold() if isinstance(value, str) else ""
+
+
+def last_reviewed_date(frontmatter: Frontmatter) -> date | None:
+  """取出可比较的 last_reviewed；非法或缺失返回 None（由 V5 负责报错）。"""
+  value = frontmatter.values.get("last_reviewed")
+  if type(value) is date:
+    return value
+  if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+    try:
+      return date.fromisoformat(value.strip())
+    except ValueError:
+      return None
+  return None
+
+
+def navigation_links(
+    docs_dir: Path, config: GovernanceConfig | None = None
+) -> Iterator[tuple[Path, int, str, Path]]:
+  """遍历各级 README 中指向 docs 内 Markdown 的链接。
+
+  产出 (README 路径, 行号, 原始链接文本, 解析后的目标路径)。
+  """
+  config = _cfg(config)
+  resolved_docs = docs_dir.resolve()
+  for readme in markdown_files(docs_dir):
+    if readme.name.casefold() != config.navigation_readme_filename:
+      continue
+    # archive/ 下的索引 README 的本职就是列出已归档文档，不能拿「导航不得
+    # 指向作废文档」去打它——那正是它该做的事。
+    relative = readme.relative_to(docs_dir)
+    if relative.parts and relative.parts[0] == config.archive_directory_name:
+      continue
+    text = readme.read_text(encoding="utf-8", errors="replace")
+    for line_number, destination in iter_v10_links(text):
+      parts = relative_link_parts(destination)
+      if parts is None or parts[0] is None:
+        continue
+      target = (readme.parent / parts[0]).resolve()
+      if target.suffix.lower() != ".md" or not target.is_file():
+        continue
+      if not target.is_relative_to(resolved_docs):
+        continue
+      yield readme, line_number, destination, target
+
+
+def audit_v11(
+    root: Path,
+    config: GovernanceConfig | None = None,
+    today: date | None = None,
+) -> GateResult:
+  """V11 防腐烂：导航与标签互检判失败；久未复核与孤儿文档只提示。
+
+  分级的理由见 ``GateResult.notice``：能明确指认「谁和谁打架」的判失败，
+  只能表达「这里可能变味了」的一律降级，否则门禁会被整个关掉。
+  """
+  config = _cfg(config)
+  docs_dir = root / config.docs_root
+  result = GateResult("V11", f"{config.docs_root}:1", "0 篇受治理文档")
+  if not docs_dir.is_dir():
+    return result
+  if yaml is None:
+    detail = f"：{YAML_IMPORT_ERROR}" if YAML_IMPORT_ERROR else ""
+    result.add(docs_dir, 1, f"缺少 PyYAML 依赖，无法执行防腐烂检查{detail}", root)
+    return result
+
+  today = today or date.today()
+  resolved_docs = docs_dir.resolve()
+  linked: set[Path] = set()
+
+  # T12：导航与标签互检。README 把一篇文档列为可读入口，而该文档自称已作废，
+  # 两者必有一错——正是「导航过期藏不住，标签错误也藏不住」。
+  for readme, line_number, destination, target in navigation_links(
+      docs_dir, config
+  ):
+    linked.add(target)
+    status = document_status(target)
+    if status in config.historical_statuses:
+      result.add(
+          readme,
+          line_number,
+          f"导航仍指向已作废文档：{destination}"
+          f"（{display_path(target, root)} 自称 status={status}）",
+          root,
+      )
+
+  governed = 0
+  for path in markdown_files(docs_dir):
+    relative = path.relative_to(docs_dir)
+    if relative.parts and relative.parts[0] == config.archive_directory_name:
+      continue
+    frontmatter = parse_frontmatter(path)
+    # 未纳入治理的文档谈不上「该被导航到」「该被复核」，不在本门范围内。
+    if frontmatter.absent or frontmatter.error:
+      continue
+    governed += 1
+
+    # T11 孤儿：没有任何 README 能走到它。三类豁免——
+    #   README 自身是导航本身；docs 根下文档直接可见；
+    #   所在目录压根没有 README 时，「这个目录还没建导航」由 V4 提示一次即可，
+    #   在这里对该目录每一篇文档各报一次，只是把同一件事说 N 遍。
+    # 已作废文档同样不报：它们本来就不该被导航链接（链接了会触发上面的
+    # 互检失败），劝人「加进 README」等于劝人去踩另一个错。
+    status = document_status(path)
+    is_navigation = path.name.casefold() == config.navigation_readme_filename
+    directory_has_navigation = any(
+        sibling.name.casefold() == config.navigation_readme_filename
+        for sibling in path.parent.iterdir()
+        if sibling.is_file()
+    )
+    if (
+        not is_navigation
+        and status not in config.historical_statuses
+        and directory_has_navigation
+        and path.resolve() not in linked
+        and path.parent.resolve() != resolved_docs
+    ):
+      result.notice(
+          path,
+          1,
+          "孤儿文档：所在目录的 README 没有链接到它，"
+          "读者只能靠全文检索撞见；建议把它加入该 README",
+          root,
+      )
+
+    # T11 久未复核。
+    reviewed = last_reviewed_date(frontmatter)
+    if reviewed is not None:
+      age = (today - reviewed).days
+      if age > config.last_reviewed_max_age_days:
+        result.notice(
+            path,
+            frontmatter.fields.get("last_reviewed", 1),
+            f"已 {age} 天未复核（阈值 {config.last_reviewed_max_age_days} 天）；"
+            "确认仍然有效后更新 last_reviewed 即可",
+            root,
+        )
+
+  result.checked = f"{governed} 篇受治理文档"
+  return result
+
+
 AUDITORS = {
     "V2": audit_v2,
     "V4": audit_v4,
     "V5": audit_v5,
     "V9": audit_v9,
     "V10": audit_v10,
+    "V11": audit_v11,
 }
 
 
 def print_result(result: GateResult) -> None:
-  """输出稳定、可被 CI 阅读的 gate 结果。"""
+  """输出稳定、可被 CI 阅读的 gate 结果。提示不影响 PASS/FAIL 判定。"""
   issues = sorted(set(result.issues))
-  if not issues:
-    print(f"{result.gate} PASS {result.anchor} - 已检查 {result.checked}")
-    return
-  print(
-      f"{result.gate} FAIL {result.anchor} - "
-      f"{len(issues)} 个问题；已检查 {result.checked}"
-  )
-  for issue in issues:
-    print(f"  {issue.path}:{issue.line} - {issue.message}")
+  notices = sorted(set(result.notices))
+  suffix = f"；{len(notices)} 条提示" if notices else ""
+  if issues:
+    print(
+        f"{result.gate} FAIL {result.anchor} - "
+        f"{len(issues)} 个问题；已检查 {result.checked}{suffix}"
+    )
+    for issue in issues:
+      print(f"  {issue.path}:{issue.line} - {issue.message}")
+  else:
+    print(
+        f"{result.gate} PASS {result.anchor} - 已检查 {result.checked}{suffix}"
+    )
+  for note in notices:
+    print(f"  提示 {note.path}:{note.line} - {note.message}")

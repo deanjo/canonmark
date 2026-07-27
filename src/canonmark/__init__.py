@@ -2,7 +2,10 @@
 
 公开入口：
   - :class:`canonmark.config.GovernanceConfig` / :func:`canonmark.config.load_config`
-  - :mod:`canonmark.audit` 五门审计函数
+  - :mod:`canonmark.audit` 各门审计函数（门的清单见 ``audit.SUPPORTED_GATES``）
+  - :func:`canonmark.read.read_document` 按权威契约交付（或扣下）正文
+  - :func:`canonmark.index.build_index` 紧凑的标签清单
+  - :func:`canonmark.mcp.serve` MCP server（stdio）
   - :func:`canonmark.cli.main` 命令行入口（``canon``）
 """
 

@@ -1,7 +1,7 @@
 ---
 status: current
 owner: canonmark
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-27
 ---
 
 # canonmark 进度心跳
@@ -10,6 +10,11 @@ last_reviewed: 2026-07-21
 
 | 时间 | 阶段 | 状态 | 下一步 |
 |---|---|---|---|
+| 2026-07-27 | 波次 3:P6 读取接线 | T13/T14 实现完毕(`canon read` / `canon index` / `canon mcp` / `canon init --print-mcp`),MCP server 手写 stdio JSON-RPC 保持零依赖,完整握手有测试。**A19 对照实验结论与预期不同,如实记录**:四组实测没有任何一组答错——无标签的两组靠内容线索推理出正确方向但明确要求人拍板,有标签的两组直接确定判定。标签的价值成立(差别在置信度与是否需要人介入,不在对错),但 `canon_read` 相对「只贴标签」的**增量**收益本实验未能证明(夹具太小,A 组通读全部 6 篇也不费上下文)。可量化的增量是上下文开销:17,484 字节作废文档 → 189 字节输出,省 98.9% 且不随文档变长而增长。实验设计缺陷已自陈 | 待独立验收;波次 4(发布)需用户拍板 |
+| 2026-07-27 | 波次 2 完成:第四轮复验 **ACCEPT** | P5 全部交付。A13–A16 / A20–A22 置 PASS,被 P5 打破的 A8/A9 恢复 PASS。四轮验收的价值不在挑错多,而在**逼出了修法的升级**:前三轮每轮都是「改掉被点名的几处、再在相邻位置同样错一次」,直到把「不许手抄会变的数字」从一条规矩变成一道机器守卫(`tests/test_contract.py`:模块 docstring 的门清单必须等于 `SUPPORTED_GATES`;`pyproject.toml` 声称不需 PyYAML 的门必须实测确实不需要)。验收用 11 组变异确认守卫无「解析不出来就当通过」的静默放过路径。遗留非阻塞:孤儿检测单目录数千文件 O(n²);T10 一步收敛承诺仅在默认矩阵下成立 | 波次 3(T13–T14 读取接线)待用户拍板开工 |
+| 2026-07-27 | 波次 2:独立验收第二/三轮 | 代码侧全部通过并定稿(六项修复逐条复现、gradual 下仍有 16 类判失败、#1–#6 回归全在)。两轮都卡在同一件事:**文档里的手抄数字**——同类错误连犯四次,第三次发生在刚把「不许手抄会变的数字」写进 roadmap 之后,第四次是改 A 处测试弄坏了 B 处抄的数。第三轮还指出扫描范围只到 `docs/*.md`,漏了源码树:`audit.py` 开篇 docstring 说「五门」且不知道有 V11,`__init__.py`、`pyproject.toml` 依赖声明同样漏。修法从「改数字」升级为「不写数字 + 让机器守」:证据栏改写成不随增删失真的性质陈述,并新建 `tests/test_contract.py` 把「模块 docstring 的门清单 = SUPPORTED_GATES」「pyproject 声称不需 PyYAML 的门实测确实不需要」接进测试(已用副本破坏实验验证守卫会红) | 待复验确认 ACCEPT |
+| 2026-07-27 | 波次 2:独立验收第一轮 REJECT → 已修复 | 验收查出 7 个问题,最严重的是 **P5 无声打破了已 PASS 的 A8/A9**(fixture 不被任何测试引用,只有人工跑 CLI 才碰得到)——修法不止补 fixture,而是新建 `tests/test_fixtures.py` 把双向 oracle 接进 pytest;另修:T10 补上 protocol §2 明文举例却漏掉的 `supersedes`→`superseded_by` 方向(更危险的一半,漏掉时旧文档继续自称 current);gradual 范围扩到 V2/V9 漏链/V10(此前 V4 说「README 可以不建」而 V9 要求链接它,自相矛盾);T12 豁免 archive 索引;孤儿提示不再对作废文档给出「照做就 FAIL」的建议。第二轮自评:78 passed / 51 subtests,自审六门 PASS exit 0,四种形态老项目均 exit 0 | 已派第二轮独立验收 |
+| 2026-07-27 | 波次 2:P5 实现 | T15 渐进采用 + T10/T11/T12 全部实现,自评 66 passed(原 42 断言零改动)/ 自审六门 PASS exit 0 / 零标签老项目实测全 PASS + 6 条提示 exit 0 / 本地 pre-commit `Passed`。新增 V11 门(T11 超期与孤儿只提示、T12 导航与标签互检判失败),T10 并入 V5。**起因是实测发现工具在最该被采用的场景里最不可用**:存量老项目装上 3 门 FAIL exit 1,其中 4 条在要求陌生项目提供 agong 内部文档(默认值未去公司化);且「给旧文档贴作废标签」这一最该做的第一步会触发连锁强制。roadmap P5 第 ④ 项(基于 diff 的启发式提示)如实标记为不做 | 已派独立验收 agent(A13–A16 / A20–A22);ACCEPT 后进波次 3 |
 | 2026-07-21 | 设计更正 + P5/P6 立项 | protocol 新增 §7「文档发现与读取路径」三层分工:README 导航为默认、`canon_read` 为主角(零额外上下文)、`canon index` 降为按需工具。**废止早期「每次先跑全库索引」的设计**(会污染上下文)。roadmap 新增 P5 防腐烂/P6 读取接线,顺序不可颠倒;tasks 新增 T10–T14;acceptance 新增 A13–A19 | 波次 2:实现 T10–T12 防腐烂检查组 |
 | 2026-07-21 | P1–P4 验收 ACCEPT | 独立验收 agent 复现判定 **ACCEPT**,A0–A11 全 PASS(42 passed / 自审 exit0 / invalid 精确 6 类 / 与 agong cksum 一致 / 翻转配置 .py md5 不变);A7 本地 pre-commit 真跑 `Passed` | 统一 commit → 等用户回来定 P5 发布 |
 | 2026-07-21 | P1 完成/P3 骨架 | 实现 agent 交付(自评 42 passed/自审 exit0/fixture 精确/与 agong 逐字节一致)——**未采信,已派独立验收 agent 复现中**;主 agent 并行写完 P3 反馈链路 4 文件 | 等验收判定 → PASS 则统一 commit + 本地真跑 pre-commit |

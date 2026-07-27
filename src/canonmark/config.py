@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+ADOPTION_MODES = frozenset({"gradual", "strict"})
+
+
 def _default_status_authority_matrix() -> dict[str, frozenset[str]]:
   """status -> 合法 current_authority 集合（治理模型词汇表）。
 
@@ -51,6 +54,21 @@ class GovernanceConfig:
   这样配置既能被 YAML / TOML 序列化，又不必在每次匹配时重复编译。
   """
 
+  # ---- 采用模式 ----------------------------------------------------------
+  # 决定「尚未治理」的部分怎么处理。一句话原则：**没做的事不罚，做错的事才罚。**
+  #   gradual（默认）：只治理已经表达了治理意图的部分——写了 frontmatter 的文档、
+  #     已经存在的 README。缺 frontmatter、缺导航一律降级为提示，不判失败。
+  #     这样任何存量项目装上都不会当场变红，可以从一篇文档开始逐步纳入。
+  #   strict：结构性缺失同样判失败，适合已完成治理的库（canonmark 自身、agong）。
+  # 无论哪种模式，「已经贴了标签却写错」始终判失败——那是做错，不是没做。
+  adoption_mode: str = "gradual"
+
+  # ---- V11 防腐烂检查 ----------------------------------------------------
+  # last_reviewed 超过多少天算「久未复核」。**只提示，永远不判失败**：
+  # 时间触发的失败会让全库在某天突然变红而当天无人改动，团队的第一反应是
+  # 关掉整个门禁，与目的正相反。
+  last_reviewed_max_age_days: int = 180
+
   # ---- docs 根与目录命名 -------------------------------------------------
   docs_root: str = "docs"
   archive_directory_name: str = "archive"
@@ -62,8 +80,10 @@ class GovernanceConfig:
   abnormal_top_level_names: frozenset[str] = frozenset(
       {"doc", "docs", "documentation"}
   )
-  # V2 目录命名白名单（产品代号 / 元目录例外）。agong 现值：deep_search6.0、_restructure。
-  v2_path_exceptions: tuple[str, ...] = ("deep_search6.0", "_restructure")
+  # V2 目录命名白名单（产品代号 / 元目录例外）。默认留空，与
+  # required_key_documents 同理：白名单天生项目特有，给具体默认值只会把某个
+  # 项目的目录名印进所有陌生项目的报错文案里。使用方在自己的配置里声明。
+  v2_path_exceptions: tuple[str, ...] = ()
   # 目录命名规则：默认 kebab-case。
   directory_name_regex: str = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
   # 命名规则的人类可读标签，仅用于 V2 报错文案。
@@ -83,6 +103,8 @@ class GovernanceConfig:
   allowed_statuses: frozenset[str] = frozenset(
       {"current", "background", "archive", "superseded"}
   )
+  # 「不再算数」的状态：默认不加载正文，导航也不该把它们列为可读入口（V11/T12）。
+  historical_statuses: frozenset[str] = frozenset({"archive", "superseded"})
   allowed_authorities: frozenset[str] = frozenset(
       {
           "roadmap-current",
@@ -153,14 +175,11 @@ class GovernanceConfig:
   )
 
   # ---- 固定关键文档（V5 显式必备清单） ----------------------------------
-  # agong 现值：控制面与工程规范四件套 + kickoff*.md 通配。项目按需覆盖为自己的必备文档。
-  required_key_documents: tuple[str, ...] = (
-      "_restructure/README.md",
-      "_restructure/PLAN.md",
-      "_restructure/TASKS.md",
-      "engineering/agong-docs-standard.md",
-  )
-  required_key_document_globs: tuple[str, ...] = ("_restructure/kickoff*.md",)
+  # 「哪些文档必须存在」天生是项目特有的，没有通用默认值可言：给出任何具体清单，
+  # 都会让陌生项目一装上就报「固定关键文档不存在」。默认留空 = 不强制任何文档存在，
+  # 项目在自己的配置里声明（canonmark 见仓库根 canonmark.toml，agong 见其自有配置）。
+  required_key_documents: tuple[str, ...] = ()
+  required_key_document_globs: tuple[str, ...] = ()
 
   # ---- 前瞻字段（供后续 hook 使用，当前审计逻辑不消费） -----------------
   # 触发治理的路径前缀：改动落在这些前缀下才需要跑门禁。
@@ -170,6 +189,11 @@ class GovernanceConfig:
 
   def __post_init__(self) -> None:
     """把源正则字符串编译为已编译对象，并派生依赖 docs_root 的正则。"""
+    if self.adoption_mode not in ADOPTION_MODES:
+      allowed = ", ".join(sorted(ADOPTION_MODES))
+      raise ValueError(
+          f"adoption_mode 取值非法：{self.adoption_mode!r}；可选值：{allowed}"
+      )
     self._directory_name_re = re.compile(self.directory_name_regex)
     self._key_document_signal_re = re.compile(
         self.key_document_signal_regex, re.IGNORECASE
@@ -200,6 +224,11 @@ class GovernanceConfig:
     )
 
   # ---- 只读访问器（审计逻辑通过这些拿已编译正则） -----------------------
+  @property
+  def is_gradual(self) -> bool:
+    """是否处于渐进采用模式：结构性缺失降级为提示。"""
+    return self.adoption_mode == "gradual"
+
   @property
   def directory_name_re(self) -> re.Pattern[str]:
     return self._directory_name_re

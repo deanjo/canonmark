@@ -1,5 +1,5 @@
 # canonmark 的反馈链路（远端）：两道彼此解耦的检查。
-#   tests      —— 审计器自身的 42 个单测，保工具质量。
+#   tests      —— 审计器自身的单测（含 fixture 双向 oracle），保工具质量。
 #   self-audit —— canonmark 用自己审自己的 docs，保文档治理（dogfood）。
 name: ci
 on:

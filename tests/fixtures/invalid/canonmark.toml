@@ -2,6 +2,11 @@
 # 运行时 docs_root 取被审计目录名，故此处 docs_root 仅为说明。
 docs_root = "docs"
 
+# 本 fixture 的职责是「该报的一处不漏地报出来」，因此按已完成治理的库对待：
+# 缺 frontmatter、缺 README 都要判失败。默认的 gradual 会把这两类降级为提示，
+# 埋雷就报不全了。
+adoption_mode = "strict"
+
 # 无产品代号 / 元目录例外：任何非 kebab-case 目录都要被 V2 抓。
 v2_path_exceptions = []
 

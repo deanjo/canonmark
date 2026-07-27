@@ -1,0 +1,284 @@
+"""`canon_read` 与 `canon index` 的行为契约测试。
+
+最要紧的一条是 `test_superseded_body_never_appears`：作废文档的正文一个字都
+不能出现在输出里。这不是「少返回一点」的优化，而是整个 P6 的立论——协议从
+「写给消费者遵守的规矩」变成「消费者拿到的数据已经过滤」，靠的就是这条。
+"""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from canonmark import read as READ
+from canonmark.config import GovernanceConfig
+from canonmark.index import build_index, render_index
+
+STRICT = GovernanceConfig(adoption_mode="strict")
+
+# 作废文档正文里的哨兵串：只要它出现在输出中，就说明过滤失效。
+SENTINEL = "SENTINEL-固定重试三次-SENTINEL"
+
+
+class ReadTestBase(unittest.TestCase):
+
+  def setUp(self) -> None:
+    self.temp_dir = tempfile.TemporaryDirectory()
+    self.root = Path(self.temp_dir.name)
+    (self.root / "docs").mkdir()
+
+  def tearDown(self) -> None:
+    self.temp_dir.cleanup()
+
+  def write(self, relative: str, content: str) -> Path:
+    path = self.root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+  def doc(
+      self,
+      status: str = "current",
+      authority: str = "contract-current",
+      superseded_by: str = "[]",
+      supersedes: str = "[]",
+      body: str = "正文占位。",
+  ) -> str:
+    return (
+        f"---\nstatus: {status}\napplies_when: 实现或修改支付重试逻辑\n"
+        f"not_for: 对账与退款流程\ncurrent_authority: {authority}\n"
+        f"supersedes: {supersedes}\nsuperseded_by: {superseded_by}\n"
+        f"owner: payments\nlast_reviewed: 2026-07-27\n---\n\n# 标题\n\n{body}\n"
+    )
+
+  def read(self, relative: str, config=None) -> READ.ReadResult:
+    return READ.read_document(self.root / relative, self.root, config)
+
+
+class CanonReadTest(ReadTestBase):
+
+  def test_superseded_body_never_appears(self) -> None:
+    """A17 的核心判据：作废文档的正文不得进入调用方上下文。"""
+    self.write("docs/design/new.md", self.doc(supersedes="[old.md]"))
+    self.write(
+        "docs/design/old.md",
+        self.doc(
+            status="superseded",
+            authority="historical-evidence",
+            superseded_by="[new.md]",
+            body=SENTINEL,
+        ),
+    )
+
+    result = self.read("docs/design/old.md")
+    rendered = READ.render_read_result(result)
+
+    self.assertEqual(READ.SUPERSEDED, result.verdict)
+    self.assertIsNone(result.body)
+    self.assertTrue(result.body_withheld)
+    self.assertNotIn(SENTINEL, rendered)
+    self.assertIn("docs/design/new.md", rendered)
+
+  def test_superseded_output_does_not_grow_with_document_length(self) -> None:
+    """作废文档越长，省下的上下文越多——这是 canon_read 可量化的增量价值。
+
+    对照实验里两组都答对了，因为夹具文档只有几百字节，读全文的代价可以忽略。
+    真实设计文档是几十 KB 量级，那时「正文根本不进上下文」不再是细节。
+    """
+    self.write("docs/design/new.md", self.doc(supersedes="[old.md]"))
+    old = self.doc(
+        status="superseded",
+        authority="historical-evidence",
+        superseded_by="[new.md]",
+        body=SENTINEL,
+    )
+    self.write("docs/design/old.md", old)
+    short = len(
+        READ.render_read_result(self.read("docs/design/old.md")).encode("utf-8")
+    )
+
+    self.write("docs/design/old.md", old + "压测数据。\n" * 2000)
+    long = len(
+        READ.render_read_result(self.read("docs/design/old.md")).encode("utf-8")
+    )
+
+    self.assertEqual(short, long)
+
+  def test_superseded_without_target_still_withholds_body(self) -> None:
+    """指不出替代目标时更要扣下正文——否则等于放行一篇公认过时的文档。"""
+    self.write(
+        "docs/design/old.md",
+        self.doc(
+            status="archive", authority="historical-evidence", body=SENTINEL
+        ),
+    )
+
+    result = self.read("docs/design/old.md")
+
+    self.assertIsNone(result.body)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_current_document_returns_body_without_frontmatter(self) -> None:
+    """正文不该把 frontmatter 再附一遍：那些字段头部摘要里已经给过。"""
+    self.write("docs/design/live.md", self.doc(body="真正的正文。"))
+
+    result = self.read("docs/design/live.md")
+
+    self.assertEqual(READ.CURRENT, result.verdict)
+    self.assertIn("真正的正文。", result.body)
+    self.assertNotIn("last_reviewed", result.body)
+    self.assertNotIn("current_authority", result.body)
+
+  def test_current_document_surfaces_scope_fields(self) -> None:
+    """not_for/applies_when 原样交出，由调用方自己判断是否命中。"""
+    self.write("docs/design/live.md", self.doc())
+
+    rendered = READ.render_read_result(self.read("docs/design/live.md"))
+
+    self.assertIn("实现或修改支付重试逻辑", rendered)
+    self.assertIn("对账与退款流程", rendered)
+    self.assertIn("适用性由你判断", rendered)
+
+  def test_ungoverned_document_is_delivered_with_a_warning(self) -> None:
+    """gradual 下放行正文 + 警告；拒绝返回只会把 agent 逼回内置读取工具。"""
+    self.write("docs/notes.md", "# 随手笔记\n\n没有标签。\n")
+
+    result = self.read("docs/notes.md")
+
+    self.assertEqual(READ.UNGOVERNED, result.verdict)
+    self.assertIn("没有标签。", result.body)
+    self.assertIn("无法验证时效性", " ".join(result.diagnostics))
+
+  def test_ungoverned_document_is_withheld_under_strict(self) -> None:
+    self.write("docs/notes.md", "# 随手笔记\n\n" + SENTINEL + "\n")
+
+    result = self.read("docs/notes.md", STRICT)
+
+    self.assertEqual(READ.INSUFFICIENT_METADATA, result.verdict)
+    self.assertIsNone(result.body)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_metadata_conflict_withholds_body(self) -> None:
+    """自称现行却声明被取代——先修元数据，正文不作为权威返回。"""
+    self.write("docs/design/new.md", self.doc())
+    self.write(
+        "docs/design/broken.md",
+        self.doc(status="current", superseded_by="[new.md]", body=SENTINEL),
+    )
+
+    result = self.read("docs/design/broken.md")
+
+    self.assertEqual(READ.METADATA_CONFLICT, result.verdict)
+    self.assertIsNone(result.body)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_missing_fields_withhold_body(self) -> None:
+    self.write(
+        "docs/design/partial.md",
+        "---\nstatus: current\n---\n\n" + SENTINEL + "\n",
+    )
+
+    result = self.read("docs/design/partial.md")
+
+    self.assertEqual(READ.INSUFFICIENT_METADATA, result.verdict)
+    self.assertNotIn(SENTINEL, READ.render_read_result(result))
+
+  def test_missing_file_is_reported_not_crashed(self) -> None:
+    result = self.read("docs/design/ghost.md")
+
+    self.assertEqual(READ.INSUFFICIENT_METADATA, result.verdict)
+    self.assertIn("文件不存在", " ".join(result.diagnostics))
+
+
+class CanonIndexTest(ReadTestBase):
+
+  def populate(self) -> None:
+    self.write("docs/design/live.md", self.doc())
+    self.write(
+        "docs/design/old.md",
+        self.doc(status="superseded", authority="historical-evidence",
+                 superseded_by="[live.md]", body=SENTINEL),
+    )
+    self.write("docs/guides/start.md", "# 入门\n\n没有标签。\n")
+
+  def test_index_is_one_line_per_document(self) -> None:
+    self.populate()
+
+    entries = build_index(self.root)
+    rendered = render_index(entries)
+
+    self.assertEqual(3, len(entries))
+    self.assertEqual(3, len(rendered.splitlines()))
+
+  def test_index_never_leaks_document_bodies(self) -> None:
+    """A18 的实质：清单是标签的清单，不是正文的搬运。"""
+    self.populate()
+
+    self.assertNotIn(SENTINEL, render_index(build_index(self.root)))
+    self.assertNotIn(
+        SENTINEL, render_index(build_index(self.root), as_json=True)
+    )
+
+  def test_index_size_is_independent_of_body_length(self) -> None:
+    """紧凑的本质：索引大小只与篇数有关，与正文多长无关。
+
+    这比「小于全文的 10%」更能表达 protocol §7.5 的意图——后者在文档很短时
+    会失真（三篇迷你文档的索引占比自然偏高），而这条断言在任何规模下都成立。
+    """
+    self.populate()
+    before = len(render_index(build_index(self.root)).encode("utf-8"))
+
+    for path in (self.root / "docs").rglob("*.md"):
+      path.write_text(
+          path.read_text(encoding="utf-8") + "补充说明。\n" * 500,
+          encoding="utf-8",
+      )
+    after = len(render_index(build_index(self.root)).encode("utf-8"))
+
+    self.assertEqual(before, after)
+
+  def test_index_stays_far_smaller_than_a_realistic_corpus(self) -> None:
+    """A18 的原始判据：真实体量下索引 < 全文的 10%。"""
+    self.populate()
+    for path in (self.root / "docs").rglob("*.md"):
+      path.write_text(
+          path.read_text(encoding="utf-8") + "章节正文。\n" * 200,
+          encoding="utf-8",
+      )
+    corpus = sum(
+        path.stat().st_size for path in (self.root / "docs").rglob("*.md")
+    )
+
+    size = len(render_index(build_index(self.root)).encode("utf-8"))
+
+    self.assertLess(size, corpus * 0.10)
+
+  def test_directory_filter(self) -> None:
+    self.populate()
+
+    entries = build_index(self.root, directory="design")
+
+    self.assertEqual(
+        ["docs/design/live.md", "docs/design/old.md"],
+        [entry.path for entry in entries],
+    )
+
+  def test_current_only_filter(self) -> None:
+    self.populate()
+
+    entries = build_index(self.root, current_only=True)
+
+    self.assertEqual(["docs/design/live.md"], [e.path for e in entries])
+
+  def test_untagged_documents_are_listed_with_placeholders(self) -> None:
+    """未治理文档也要出现在清单里——否则它们会成为看不见的盲区。"""
+    self.populate()
+
+    entries = {e.path: e for e in build_index(self.root)}
+
+    self.assertEqual("-", entries["docs/guides/start.md"].status)
+
+
+if __name__ == "__main__":
+  unittest.main()
