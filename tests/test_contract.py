@@ -60,6 +60,20 @@ class SelfDescriptionTest(unittest.TestCase):
         "新增或删除子命令时两处必须同步",
     )
 
+  def test_config_docstring_named_empty_defaults_are_actually_empty(self) -> None:
+    """config.py 的 docstring 点名「项目特有的清单类默认已清空」——钉住这句话。
+
+    P5 清空了 agong 残留的清单默认（目录白名单、固定关键文档），docstring 据此
+    声称有意偏离抽取基线。这里断言被点名的字段确实为空：塞回任何具体默认，既让
+    这句自述失真，也会让陌生项目一装上就报「固定关键文档不存在」。
+    """
+    from canonmark.config import GovernanceConfig
+
+    config = GovernanceConfig()
+    self.assertEqual((), config.v2_path_exceptions)
+    self.assertEqual((), config.required_key_documents)
+    self.assertEqual((), config.required_key_document_globs)
+
   def test_every_supported_gate_is_registered_and_callable(self) -> None:
     self.assertEqual(set(AUDIT.SUPPORTED_GATES), set(AUDIT.AUDITORS))
     for gate in AUDIT.SUPPORTED_GATES:

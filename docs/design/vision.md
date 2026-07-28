@@ -6,7 +6,7 @@ current_authority: background-reference
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-28
 ---
 
 # canonmark 愿景:让 AI agent 知道该信哪篇文档
@@ -17,14 +17,14 @@ last_reviewed: 2026-07-21
 
 agent 把 `docs/` 当权威上下文读,但文档会随时间腐烂:被新版取代、被删接口留在旧文里、两份规范互相打架。人类读者靠经验和上下文能绕过这些坑,agent 不能——它把每一句都当成还生效的事实。两个真实例子:
 
-### 例子①:两份硬约束互相打架,305 个文件卡在中间,且无机制发现
+### 例子①:两份硬约束互相打架,数百个文件卡在中间——收口靠人撞见,不靠机制
 
-在 `agong_server` 仓(canonmark 未来的第一个使用者)里,存在一对无法同时满足的硬约束:
+这是一个已收口的真实个案,按日期锚定记录。2026-07 实测,`agong_server` 仓(canonmark 未来的第一个使用者)里存在一对无法同时满足的硬约束:
 
-- `agong_server/CLAUDE.md:84` 规定:`docs/deep_search6.0/` 下所有 Markdown 文档**必须**以 `agent_` 前缀开头。
-- `agong_server/docs/engineering/agong-docs-standard.md:106` 规定:新建文档**禁止**以 `agent_` 前缀开头(标注为「硬约束」)。
+- `agong_server/CLAUDE.md` 当时规定:`docs/deep_search6.0/` 下所有 Markdown 文档**必须**以 `agent_` 前缀开头。
+- `agong_server/docs/engineering/agong-docs-standard.md` 当时规定:新建文档**禁止**以 `agent_` 前缀开头(标注为「硬约束」)。(两份文件此后持续演化,行号已漂移,故此处不引行号。)
 
-两份文档都自称权威,结论完全相反。夹在中间的是 `docs/deep_search6.0/` 下 **305 个** `agent_` 前缀文件(实测:`find docs/deep_search6.0 -name 'agent_*.md' | wc -l` = 305,占该目录 359 个 md 文件的 85%)。关键不在于「谁对」——人可以事后裁决说「这是使用者的作用域例外」——而在于:**在裁决发生之前,没有任何机制会发现这对约束互相矛盾。** agent 读到哪份就信哪份,取决于它先命中哪个文件。canonmark 的元数据契约让「谁取代谁、谁在什么场景说了算」变成机器可校验的字段,矛盾在写入时就会被审计器挡住,而不是等某个 agent 写错代码后才暴露。
+两份文档都自称权威,结论完全相反。夹在中间的是 `docs/deep_search6.0/` 下 **305 个** `agent_` 前缀文件(当时实测:`find docs/deep_search6.0 -name 'agent_*.md' | wc -l` = 305,占该目录 359 个 md 文件的 85%)。这对冲突后来收口了:2026-07-22,agong 以一次人工裁决统一命名口径(commit 667253ff1——`agent_` 前缀定为该目录的作用域例外,存量文件一篇未改名)。但收口的方式恰恰坐实了问题:**从冲突写入到人工裁决之间,没有任何机制发现这对约束在打架**——裁决之所以发生,是有人在核验中偶然撞见,不是系统报告出来的;在那之前,agent 读到哪份就信哪份,取决于它先命中哪个文件。canonmark 的元数据契约让「谁取代谁、谁在什么场景说了算」变成机器可校验的字段,矛盾在写入时就会被审计器挡住,而不是等哪个人偶然撞见、或哪个 agent 写错代码之后才暴露。
 
 ### 例子②:agent 自信调用一个早已删除的接口
 

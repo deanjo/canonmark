@@ -2,8 +2,13 @@
 
 这里把审计器里所有「项目特有」的常量收敛成一个可配置的 ``GovernanceConfig``。
 
-设计约束（来自 agong 抽取）：所有字段的**默认值逐字等于 agong 原审计器的现值**，
-从而保证「不给配置」时行为与原 ``docs-audit.py`` 零漂移，42 个迁移单测无需改断言。
+默认值的来历：抽取当时，所有字段的默认值逐字等于 agong 原审计器 ``docs-audit.py``
+的现值，保证「不给配置」时行为与原审计器零漂移、迁移单测无需改断言。P5 起有意
+偏离这条基线：项目特有的清单类默认已清空——``v2_path_exceptions``、
+``required_key_documents``、``required_key_document_globs``——这类清单没有通用
+默认值可言，agong 专属的取值对陌生项目要么直接报错（缺「固定关键文档」）、要么把
+别家目录名印进报错文案，两种都不该发生（逐字段理由详见各字段处注释）。
+抽取之后新增的字段在原审计器里没有对应物，本就不在「逐字等于」的口径内。
 
 治理词汇表（status / current_authority 的取值集合与合法矩阵）默认取通用治理模型，
 不是某个公司的品牌，正常项目直接沿用默认即可；但仍作为字段暴露，翻转配置能改变行为、
@@ -358,5 +363,5 @@ def load_config(path: str | Path | None = None) -> GovernanceConfig:
   return GovernanceConfig(**kwargs)
 
 
-# 默认配置单例：审计函数在未显式传 config 时回退到它（= agong 现值，零漂移）。
+# 默认配置单例：审计函数在未显式传 config 时回退到它（默认值的来历见模块 docstring）。
 DEFAULT_CONFIG = GovernanceConfig()

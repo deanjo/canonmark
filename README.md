@@ -154,10 +154,15 @@ reference project canonmark was extracted from runs a large Chinese doc library.
 
 ## Status
 
-**Early development — P0–P5 complete and independently verified; P6 implemented,
-awaiting independent verification.** The auditor has been extracted from its origin
-project and fully parameterized (default output is byte-identical to the original),
-invalid/valid fixtures form a two-way oracle, and canonmark audits its own docs via
+**Early development — P0–P6 complete; P0–P5 independently verified, and P6
+accepted on re-review after an initial REJECT (see below).** The auditor has been
+extracted from its origin project and fully parameterized. At extraction time (P1)
+its default output was verified byte-identical to the original's — a dated fact,
+not a standing promise: since P5 the default output intentionally diverges from
+the original, because the origin project's leftover default values were cleared
+and the new supersession-symmetry check reports issues the original never did
+(see the A1/A2 notes in [docs/acceptance.md](docs/acceptance.md)). Invalid/valid
+fixtures form a two-way oracle, and canonmark audits its own docs via
 pre-commit and CI. P5 added the anti-rot checks — supersession pointers must be
 symmetric, navigation must not list retired documents — plus the gradual adoption
 mode described above. The suite passes green, including a two-way fixture oracle
@@ -167,7 +172,11 @@ because it contained a genuine one-sided declaration the new check now catches.
 
 P6 added the reading path: `canon read` (contract-filtered delivery), `canon index`
 (compact listing), and `canon mcp` (an MCP server, hand-written over stdio JSON-RPC
-so the zero-dependency promise holds). A controlled experiment on the labelling
+so the zero-dependency promise holds). P6 went through independent review twice:
+the first round returned REJECT (nine findings); after fixes, the re-review
+returned ACCEPT, with its mandatory follow-ups folded into commit `6e21f78`. The
+matching acceptance rows (A17/A18) deliberately stay `INSUFFICIENT_EVIDENCE`
+until a human decides to flip them. A controlled experiment on the labelling
 question is written up in [docs/acceptance.md](docs/acceptance.md) — including the
 part it failed to show, which is that `canon_read`'s benefit *over labels alone*
 remains unproven at the scale tested.

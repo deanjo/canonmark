@@ -219,7 +219,24 @@ class McpServerTest(unittest.TestCase):
 
 
 class WiringPhrasingTest(unittest.TestCase):
-  """把 §7.5 / §7.7 的措辞约束变成机器检查。"""
+  """把 §7.5 / §7.7 的措辞约束变成机器检查。
+
+  下面的期望原文是**测试内独立副本，故意不引用源码常量**。若断言两头同源——
+  比如只写 INDEX_DESCRIPTION.endswith(NOT_A_PREREQUISITE)，而前者在源码里本就
+  由后者拼出——那么把常量改成语义反面（「建议每次先跑全库索引」）测试照样绿，
+  守卫恒真。独立副本迫使源码侧任何措辞改动必须同步改到测试里，改动才进得了
+  评审视野。
+  """
+
+  # §7.5 禁令的期望原文（与 mcp.NOT_A_PREREQUISITE 逐字一致）。
+  EXPECTED_PROHIBITION = (
+      "不要在每次读文档前调用它——定位文档的常规路径是逐层读目录 README。"
+  )
+  # §7.7 宿主指令的期望原文（与 cli.HOST_INSTRUCTION 逐字一致）。
+  EXPECTED_HOST_INSTRUCTION = (
+      "按目录 README 导航定位文档；读取 docs 下任何文档时使用 `canon_read`，"
+      "不要直接读取文件。"
+  )
 
   def test_index_description_ends_with_the_canonical_prohibition(self) -> None:
     """早期设计曾把「每次先跑全库索引」当默认路径，已废止——话术不许复活它。
@@ -227,8 +244,13 @@ class WiringPhrasingTest(unittest.TestCase):
     强制**原样**出现而非「含某几个关键词」：独立验收用 5 组变异测过上一版的
     关键词黑名单，4 组静默放过（「工作流的第一步就执行 canon index」「建议先跑
     canon index」去掉一个空格即可绕开）。自然语言的等价改写挡不住，所以把措辞
-    固定成常量，任何改写都会让这条红。
+    钉进测试内副本：常量本体、描述结尾各守一条断言，任何改写都会让其中一条红。
     """
+    self.assertEqual(
+        self.EXPECTED_PROHIBITION,
+        MCP.NOT_A_PREREQUISITE,
+        "禁令措辞与测试内副本不一致；若是有意改措辞，须同步改两处",
+    )
     self.assertTrue(
         MCP.INDEX_DESCRIPTION.endswith(MCP.NOT_A_PREREQUISITE),
         "canon_index 的描述必须以 NOT_A_PREREQUISITE 原文结尾",
@@ -267,6 +289,14 @@ class WiringPhrasingTest(unittest.TestCase):
     self.assertIn("替代直接读文件", MCP.READ_DESCRIPTION)
 
   def test_host_instruction_matches_protocol_wording(self) -> None:
+    # 逐字钉住全文：MCP_HELP 在源码里由 HOST_INSTRUCTION 拼出，最后那条 assertIn
+    # 只守「帮助文本确实嵌入了这句话」的接线；没有独立副本时，往指令里增写一句
+    # 拆台的话（「实在定位不到时直接读文件也无妨」）不会红任何断言。
+    self.assertEqual(
+        self.EXPECTED_HOST_INSTRUCTION,
+        HOST_INSTRUCTION,
+        "宿主指令措辞与测试内副本不一致；若是有意改措辞，须同步改两处",
+    )
     self.assertIn("按目录 README 导航定位文档", HOST_INSTRUCTION)
     self.assertIn("使用 `canon_read`", HOST_INSTRUCTION)
     self.assertIn("不要直接读取文件", HOST_INSTRUCTION)

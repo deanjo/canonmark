@@ -6,7 +6,7 @@ current_authority: contract-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 ---
 
 # canonmark 权威元数据契约与判定协议
@@ -154,11 +154,14 @@ canonmark 是**检查端**。与之配套的**写作端**是 `technical-plan-sha
 
 **分工**:skill 管「怎么写出合规文档」(靠自觉),canonmark 管「写完了机器验一遍」(靠门禁)。**词汇表与合法矩阵以本节为单一事实源**,写作端引用而非复制——否则加字段、改矩阵要改两处,迟早漂移。
 
-**已知冲突(待裁决,记录在此以免被遗忘)**:skill §1.5 规定「`background-reference` 只能配 `status: background`」,而本节允许 `current + background-reference`。两者不能同时成立,且按 skill 的规则,canonmark 自己的 `vision.md` 是非法文档。
+**已知冲突(待裁决,记录在此以免被遗忘),共两处**:
+
+1. skill §1.5 规定「`background-reference` 只能配 `status: background`」,而本节允许 `current + background-reference`。两者不能同时成立,且按 skill 的规则,canonmark 自己的 `vision.md` 是非法文档。
+2. skill §1.5 规定 `historical-evidence` 只能配 `status: archive` 或 `superseded`,而本节 §4 矩阵的 `background` 行明确允许 `background + historical-evidence`。即同一篇 `background + historical-evidence` 文档,canonmark 审计放行(2026-07-28 实测:strict 模式下全门 PASS、exit 0),按 skill 却是非法组合。
 
 本协议的立场与理由:`status` 表示**生命周期**(还在维护吗),`current_authority` 表示**能主导什么**,这是两个正交维度。强行绑定会丢掉「当前维护但不主导」这种常见形态的表达力——`vision.md` 正是此类:它在维护中(不是背景、更不是过期),但不该主导实现。若按 skill 的规则把它标成 `status: background`,反而与事实不符。
 
-裁决前双方都不得单方面改动;这条冲突本身就是本项目要消灭的形态(两份权威对同一件事给出相反规定),而且**canonmark 检查不到它**——它只校验自己配置内的一致性,不知道 skill 的存在。这是一条真实的能力边界,见 `acceptance.md`「未验证范围」。
+裁决前双方都不得单方面改动;这两处冲突本身就是本项目要消灭的形态(两份权威对同一件事给出相反规定),而且**canonmark 检查不到它们**——它只校验自己配置内的一致性,不知道 skill 的存在。这是一条真实的能力边界,见 `acceptance.md`「未验证范围」。
 
 ## 5. fail-closed 语义:缺字段 / 矛盾时怎么办
 
@@ -275,7 +278,7 @@ canonmark 是**检查端**。与之配套的**写作端**是 `technical-plan-sha
 1. **强制原样**:MCP 工具描述必须以常量 `NOT_A_PREREQUISITE` 的原文结尾。之所以要求原样而非「含某几个关键词」——独立验收用 5 组变异测过关键词黑名单,4 组静默放过(「工作流的第一步就执行 canon index」「建议先跑canon index」去掉一个空格即可绕开)。自然语言的等价改写挡不住,统一措辞是可机检的前提。
 2. **黑名单兜底**:去空格后匹配若干「先…canon index」变体,覆盖描述、接线片段与宿主话术。
 
-**这道守卫挡得住什么、挡不住什么(如实记录)**:它保证禁令不被改写或删除,**不保证描述别处不出现相反指引**——验收实测,在禁令原样保留的前提下,前面增写「开始任何任务前请务必先调用本工具」仍会静默放过。增写这条路只能靠人工审阅。
+**这道守卫挡得住什么、挡不住什么(如实记录)**:它保证禁令不被改写或删除(禁令期望原文在测试内有独立字面量副本,不与实现共享常量,防同源恒真),**不保证描述别处不出现相反指引**——验收实测,在禁令原样保留的前提下,前面增写「开始任何任务前请务必先调用本工具」仍会静默放过。增写这条路只能靠人工审阅。
 
 ### 7.6 README 与文档标签互检
 
@@ -293,7 +296,7 @@ README 文件清单标注为现行、而该文档自身声明已作废时,判为
 两处设计决定值得记录:
 
 1. **为什么必须有 MCP 这一层**:写在文档里的约定,agent 得先读到那篇文档才知道(先有鸡先有蛋);注册进工具面的能力,它睁眼就看见。这就是 T14 说的「让能力出现在消费者工具面,而非仅存在于文档约定」。
-2. **为什么手写 MCP server 而不用官方 SDK**:canonmark 承诺 `pip install` 后纯标准库即可跑。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0,自己实现不到两百行,换取的是不把额外依赖树压给每个使用者。实现范围限于 `initialize` / `tools/list` / `tools/call` 三个方法,够跑通工具调用;完整握手有测试覆盖。
+2. **为什么手写 MCP server 而不用官方 SDK**:canonmark 承诺 `pip install` 后纯标准库即可跑。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0,自己实现的体量很小,不值得为省它把一棵额外依赖树压给每个使用者。实现范围限于 `initialize` / `tools/list` / `tools/call` 三个方法,够跑通工具调用;完整握手有测试覆盖。
 
 **诚实边界**:话术仍是话术。工具进了列表、描述里写死了「替代直接读文件」,但 agent 理论上仍可能顺手用内置读取工具绕过去。要拦死需要宿主侧的钩子(例如拦截对 `docs/**` 的直接读取并转交 `canon_read`),那超出本工具的范围。当前设计是三重提示(工具在列表里 + 描述说死 + 宿主指令一句),不是强制。
 

@@ -6,12 +6,12 @@ current_authority: roadmap-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 ---
 
 # canonmark 路线图
 
-结论:canonmark 分 8 个阶段(P0–P7)。核心地基是 P1(抽取参数化)+ P3(自审反馈链路)。**P0–P5 已完成并经独立验收 ACCEPT;当前处于 P6(读取接线),T13/T14 已实现、待验收。** 逐项状态见 [tasks/README.md](./tasks/README.md)。
+结论:canonmark 分 8 个阶段(P0–P7)。核心地基是 P1(抽取参数化)+ P3(自审反馈链路)。**P0–P5 已完成并经独立验收 ACCEPT;P6(读取接线)已实现,首轮独立验收 REJECT、修复后复验判定 ACCEPT(必办项已并入 commit 6e21f78);当前处于审读修复与发布前置,acceptance 的 A17/A18 是否置 PASS 待用户拍板。** 逐项状态见 [tasks/README.md](./tasks/README.md)。
 
 ## 这个项目是什么(一句话)
 
@@ -27,7 +27,7 @@ last_reviewed: 2026-07-27
 产物:项目骨架、权威文档结构、协议规范初稿。出口:文档结构齐全,且能被 canonmark 自己的规范识别。
 
 ### P1 抽取参数化(地基核心)
-把 agong `docs-audit.py`(1441 行)抽取到 `src/canonmark/`,项目特有硬编码抽到 `canonmark.toml`,加 `--config`;**默认值 = agong 现值**,迁移的 42 个单测**断言零改动**全绿。(措辞须精确:断言文本确实一字未改,但调用侧有改动——迁移用例中若干处显式传入 strict 配置,且 P5 的对称性检查是破坏性变更,有一个 fixture 因此被迫修正。完整口径见 [acceptance.md](acceptance.md) 的 A1。)
+把 agong `docs-audit.py`(1441 行)抽取到 `src/canonmark/`,项目特有硬编码抽到 `canonmark.toml`,加 `--config`;**默认值 = agong 现值(P1 时点;P5 起有意清空项目特有清单类默认,见 P5 节与 `src/canonmark/config.py` 模块 docstring)**,迁移的 42 个单测**断言零改动**全绿。(措辞须精确:断言文本确实一字未改,但调用侧有改动——迁移用例中若干处显式传入 strict 配置,且 P5 的对称性检查是破坏性变更,有一个 fixture 因此被迫修正。完整口径见 [acceptance.md](acceptance.md) 的 A1。)
 必修(对抗核验坐实,不做就是半拉子):① 必须参数化最大的 `audit_v5` frontmatter 主体(L909–1139);② `status`/`authority` 词汇表定性为「治理模型固定词汇」而非项目品牌,不当可换配置暴露;③ 补 `trigger_paths`/`auditor_home` 等跨模块字段;④ 补 L471 的 docs 根字面量。
 出口:`canon audit` 能在带自定义配置的项目上正确运行;42 单测全绿。
 
@@ -73,7 +73,7 @@ T15(已完成)的一句话原则:**没做的事不罚,做错的事才罚。** �
 - `canon init` 生成 MCP 配置片段与宿主指令话术(§7.7 的正确版本)。
 出口:**对照实验**证明消费者读到作废文档时被拦截并改读替代目标——可复现的实验,不接受「应该会生效」这类判断。
 
-**实现状态:T13/T14 已实现**(`canon read` / `canon index` / `canon mcp` / `canon init --print-mcp`),待独立验收。
+**实现状态:T13/T14 已实现**(`canon read` / `canon index` / `canon mcp` / `canon init --print-mcp`);首轮独立验收判定 REJECT(9 问题),修复后复验判定 ACCEPT,两项必办已完成并入 commit 6e21f78。acceptance 的 A17/A18 是否据此置 PASS 待用户拍板,拍板前维持 INSUFFICIENT_EVIDENCE。
 
 **对照实验的结论与预期不同,记在这里而不是藏进附录**:四组实测**没有任何一组答错**。无标签的两组都靠内容线索推理出了正确方向,但都明确标注低置信度、要求人拍板;有标签的两组直接确定判定。**所以标签的价值成立,但表现方式是「置信度与是否需要人介入」,不是「答对答错」**——真实成本不是 AI 答错,而是每次都要人来拍板,而这个项目的前提正是没人有空拍板。
 

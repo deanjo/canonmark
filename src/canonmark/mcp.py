@@ -5,8 +5,8 @@
 消费者工具面，而非仅存在于文档约定」。
 
 为什么手写而不用官方 SDK：canonmark 的承诺是 ``pip install`` 后纯标准库即可跑
-（见 pyproject 的依赖说明）。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0，自己实现
-不到两百行，换取的是不把 pydantic 那一串依赖压给每个使用者。
+（见 pyproject 的依赖说明）。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0，手写实现
+的体量很小，不值得为省它把 pydantic 那一串依赖压给每个使用者。
 
 协议实现范围：``initialize`` / ``tools/list`` / ``tools/call`` 三个方法，外加
 ``notifications/*`` 通知（不回响应）。够跑通工具调用，不实现 resources/prompts。
