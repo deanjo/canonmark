@@ -46,6 +46,9 @@ REFERENCE_DEFINITION_RE = re.compile(
 )
 LINE_FRAGMENT_RE = re.compile(r"^L([0-9]+)(?:-L([0-9]+))?$", re.IGNORECASE)
 FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+# gradual 宽松判定用：frontmatter 首个非空行应形如 `key:` / `key: value`，
+# 键名为常规标识符。不像的按 Markdown 水平线对待（见 parse_frontmatter）。
+FRONTMATTER_KEY_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_-]*\s*:(\s|$)")
 
 
 def _cfg(config: GovernanceConfig | None) -> GovernanceConfig:
@@ -176,13 +179,29 @@ def starts_frontmatter(first_line: str) -> bool:
   return first_line.lstrip("\ufeff").strip() == "---"
 
 
-def parse_frontmatter(path: Path) -> Frontmatter:
-  """用 PyYAML 解析顶部 frontmatter，并拒绝重复一级字段。"""
+def parse_frontmatter(
+    path: Path, config: GovernanceConfig | None = None
+) -> Frontmatter:
+  """用 PyYAML 解析顶部 frontmatter，并拒绝重复一级字段。
+
+  ``config`` 为 gradual 时启用宽松判定：首行是 ``---``、但其后首个非空行
+  不像 YAML 键值对的，把这个 ``---`` 按 Markdown 水平线对待，整篇视为
+  未纳入治理（absent）——以分隔线开头的存量笔记不是「写了标签却写错」。
+  只要那行像键值对（哪怕忘了闭合 ``---``），任何模式下都仍按 frontmatter
+  尝试并照常报错。不传 config 即保持既有判定；这里刻意不回退
+  DEFAULT_CONFIG，否则「忘了传」会静默变成宽松模式。
+  """
   lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
   if not lines or not starts_frontmatter(lines[0]):
     return Frontmatter(
         {}, {}, None, "缺少顶部 YAML frontmatter", 1, absent=True
     )
+  if config is not None and config.is_gradual:
+    first_content = next((line for line in lines[1:] if line.strip()), "")
+    if not FRONTMATTER_KEY_RE.match(first_content):
+      return Frontmatter(
+          {}, {}, None, "缺少顶部 YAML frontmatter", 1, absent=True
+      )
 
   closing_index = next(
       (index for index in range(1, len(lines)) if lines[index].strip() == "---"),
@@ -992,13 +1011,9 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     if path.is_relative_to(docs_dir / config.archive_directory_name):
       continue
     text = path.read_text(encoding="utf-8", errors="replace")
-    frontmatter = parse_frontmatter(path)
-    lines = text.splitlines()
-    if (
-        lines
-        and starts_frontmatter(lines[0])
-        and frontmatter.error is not None
-    ):
+    frontmatter = parse_frontmatter(path, config)
+    # absent 已含文档级结论（gradual 下水平线开头也算 absent），不再重看首行。
+    if not frontmatter.absent and frontmatter.error is not None:
       malformed_frontmatter_documents.add(path)
     if (
         is_key_document(path, docs_dir, frontmatter, text, config)
@@ -1010,7 +1025,7 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     if not path.is_file():
       result.add(path, 1, "固定关键文档不存在", root)
       continue
-    frontmatter = parse_frontmatter(path)
+    frontmatter = parse_frontmatter(path, config)
     if frontmatter.error:
       # gradual：从未贴过标签的文档只提示不判失败——那是「尚未纳入治理」，
       # 不是过错。显式列入 required_key_documents 的除外：那是项目自己声明
@@ -1136,7 +1151,7 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
           continue
         if old.name.casefold() == "readme.md":
           continue
-        old_frontmatter = parse_frontmatter(old)
+        old_frontmatter = parse_frontmatter(old, config)
         if config.is_gradual and old_frontmatter.absent:
           result.notice(
               path,
@@ -1243,7 +1258,7 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
               root,
           )
         elif target.name.casefold() != "readme.md":
-          target_frontmatter = parse_frontmatter(target)
+          target_frontmatter = parse_frontmatter(target, config)
           target_missing = [
               name
               for name in required_fields
@@ -1520,7 +1535,7 @@ def audit_v10(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   for source in sources:
     text = source.read_text(encoding="utf-8", errors="replace")
     # 与 V5 同一口径：贴过标签的文档要为自己的链接负责，没贴的只提示。
-    governed = not config.is_gradual or not parse_frontmatter(source).absent
+    governed = not config.is_gradual or not parse_frontmatter(source, config).absent
     link_count += audit_relative_links(
         source, text, result, root, line_count_cache, governed
     )

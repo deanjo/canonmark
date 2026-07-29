@@ -1411,6 +1411,71 @@ class AdoptionModeTest(AuditTestBase):
         ["docs/design/broken.md"], [issue.path for issue in result.issues]
     )
 
+  def test_gradual_treats_leading_horizontal_rule_as_untagged(self) -> None:
+    """以 --- 分隔线开头的存量笔记不是「写坏的标签」，是没贴标签。
+
+    首行 --- 之后的首个非空行不像 YAML 键值对时，这个 --- 是 Markdown
+    水平线；按「有 frontmatter 但缺字段」判失败会打破「没做的事不罚」。
+    """
+    self.write(
+        "docs/design/payment-design.md",
+        "---\n\n# 旧笔记\n\n早于治理规范的存量内容。\n\n---\n\n尾注。\n",
+    )
+
+    result = DOCS_AUDIT.audit_v5(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual(
+        ["docs/design/payment-design.md"],
+        [note.path for note in result.notices],
+    )
+    self.assertIn("未纳入治理", result.notices[0].message)
+
+  def test_strict_still_treats_leading_horizontal_rule_as_frontmatter(
+      self,
+  ) -> None:
+    """strict 面向已完成治理的库：分隔线开头照旧按 frontmatter 缺陷判失败。"""
+    self.write(
+        "docs/design/payment-design.md",
+        "---\n\n# 旧笔记\n\n早于治理规范的存量内容。\n\n---\n\n尾注。\n",
+    )
+
+    result = DOCS_AUDIT.audit_v5(self.root, STRICT)
+
+    self.assertEqual(
+        ["docs/design/payment-design.md"],
+        [issue.path for issue in result.issues],
+    )
+    self.assertEqual([], result.notices)
+
+  def test_unclosed_frontmatter_with_yaml_key_fails_in_both_modes(self) -> None:
+    """--- 后紧跟键值对说明真在写标签；忘了闭合不能被水平线放宽漏掉。"""
+    self.write(
+        "docs/design/unclosed.md", "---\nstatus: current\n\n# 文档\n"
+    )
+
+    for config in (None, STRICT):
+      with self.subTest(mode=config.adoption_mode if config else "gradual"):
+        issues = self.v5_issues_for("docs/design/unclosed.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn("缺少结束分隔符", issues[0].message)
+
+  def test_bom_plus_horizontal_rule_is_untagged_in_gradual(self) -> None:
+    """BOM 剥离与水平线宽松判定叠加：既不炸，也不误判成写坏的标签。"""
+    self.write(
+        "docs/design/payment-design.md",
+        "﻿---\n\n# 旧笔记\n\n正文。\n",
+    )
+
+    result = DOCS_AUDIT.audit_v5(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual(
+        ["docs/design/payment-design.md"],
+        [note.path for note in result.notices],
+    )
+    self.assertIn("未纳入治理", result.notices[0].message)
+
   def test_gradual_exempts_untagged_supersession_target(self) -> None:
     """贴一张作废标签是收益最高的第一步，不该被目标文档缺标签连坐。"""
     self.untagged("docs/design/payment-design-v2.md")

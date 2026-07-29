@@ -150,6 +150,22 @@ class CanonReadTest(ReadTestBase):
     self.assertIn("没有标签。", result.body)
     self.assertIn("无法验证时效性", " ".join(result.diagnostics))
 
+  def test_leading_horizontal_rule_document_is_ungoverned_in_gradual(
+      self,
+  ) -> None:
+    """以 --- 分隔线开头的存量笔记按未纳入治理放行，而不是扣下正文。
+
+    与审计器共用 parse_frontmatter 这一个判定入口，行为必须同步：
+    gradual 下这个 --- 是 Markdown 水平线，不是写坏的 frontmatter。
+    """
+    self.write("docs/notes.md", "---\n\n# 随手笔记\n\n正文在此。\n")
+
+    result = self.read("docs/notes.md")
+
+    self.assertEqual(READ.UNGOVERNED, result.verdict)
+    self.assertIn("正文在此。", result.body)
+    self.assertIn("未纳入治理", " ".join(result.diagnostics))
+
   def test_ungoverned_document_is_withheld_under_strict(self) -> None:
     self.write("docs/notes.md", "# 随手笔记\n\n" + SENTINEL + "\n")
 

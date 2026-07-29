@@ -146,7 +146,7 @@ def read_document(
     return ReadResult(
         shown, INSUFFICIENT_METADATA, diagnostics=[f"读取失败：{error}"]
     )
-  frontmatter = parse_frontmatter(path)
+  frontmatter = parse_frontmatter(path, config)
 
   # 未纳入治理：gradual 下放行正文并说明无法验证时效性。理由见 protocol §7.4——
   # 拒绝返回会把 agent 逼回内置读取工具，那时连这句警告都收不到，比放行更糟。
