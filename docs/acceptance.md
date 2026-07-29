@@ -6,7 +6,7 @@ current_authority: acceptance-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 ---
 
 # canonmark 验收矩阵
@@ -39,7 +39,7 @@ last_reviewed: 2026-07-28
 | A17 | P6 | `canon_read` 对作废文档不返回正文 | `pytest tests/test_read.py tests/test_mcp.py` | 返回替代目标,**正文不出现在输出中** | 哨兵串断言:CLI 层与 MCP 工具调用层双双不泄漏正文;另断言输出长度**不随文档变长而增长**(测试把同一篇作废文档撑长两千行,输出字节数一字不变) | INSUFFICIENT_EVIDENCE |
 | A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例 | INSUFFICIENT_EVIDENCE |
 | A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 见下「A19 对照实验记录」 | 答案取自现行文档,非作废文档 | **四组实测,结论与预期不同**:标签的价值成立(无标签组只能推理并明确要求人确认),但 `canon_read` 的**增量**价值在本实验规模下未体现——有标签组不用工具也答对了。详见下节,含实验设计缺陷的自陈 | INSUFFICIENT_EVIDENCE |
-| A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P7 | PENDING |
+| A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P7 开工(T9),发布拍板在用户;原状态误用表外第六态 PENDING,2026-07-29 更正为五态内取值 | BLOCKED |
 
 **A17/A18 状态说明(2026-07-28 记)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。A17/A18 是否据此由 INSUFFICIENT_EVIDENCE 置 PASS,待用户拍板;拍板前维持原状态值。
 

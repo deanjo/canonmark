@@ -6,14 +6,14 @@ current_authority: contract-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-29
 ---
 
 # canonmark 开工卡
 
 > 本卡是编排纪律的唯一权威版本。后续任何「回顾纪律」的需求,读本文件回答,不重新生成。
 
-【目标】把 agong_server 内部已验证的文档治理能力抽取为独立开源工具 canonmark——一个「裁决 AI 该信哪篇文档」的可配置审计工具,完成地基(抽取参数化 + 去公司化 + 自审反馈链路),用证据证明可跨项目运行。首轮委托划定的不做清单:GitHub 远程公开发布(留用户拍板)、agong_server 侧接入改造、推广到其他公司仓、独立 spec 站点、prose / 格式 lint、外链检查。
+【目标】把 agong_server 内部已验证的文档治理能力抽取为独立开源工具 canonmark——一个「裁决 AI 该信哪篇文档」的可配置审计工具。完整目标三件套:给关键文档贴权威标签(frontmatter);**让 AI 读任何文档都先读头部标签、再决定读不读正文**(protocol §3 五步判定,`canon_read` 落地为机制);用审计门禁保证标签不腐烂。(第二条系 2026-07-29 应用户要求明写进本卡——此前仅存在于 protocol §3,目标句漏记导致历次总结丢失这条。)完成地基(抽取参数化 + 去公司化 + 自审反馈链路),用证据证明可跨项目运行。首轮委托划定的不做清单:GitHub 远程公开发布(留用户拍板)、agong_server 侧接入改造、推广到其他公司仓、独立 spec 站点、prose / 格式 lint、外链检查。
 
 **范围更正(2026-07-27)**:上面这份清单原本还含「MCP server」,但 P6 已按 roadmap 与用户放行交付了 `canon mcp`——**文档与已发生的事实冲突时以事实为准,文档随之修正**(protocol §5.4)。留着那一句会让这份 `contract-current` 文档明文禁止一件已经做完的事,正是 canonmark 要消灭的缺陷形态。其余各项仍然有效。
 

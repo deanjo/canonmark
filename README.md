@@ -12,6 +12,10 @@ canonmark makes document authority a machine-checkable contract in the header of
 each key doc: which doc is current, which is superseded, who wins a conflict, and
 what a doc is allowed to decide. Then it breaks the build when your docs lie about it.
 
+Just as important: agents **read the label before the body**. The five-step protocol
+parses frontmatter first, and `canon_read` turns that habit into a mechanism — a
+superseded doc returns its replacement pointer, never its text.
+
 ## Before / after
 
 **Before** — nothing marks the old doc as dead, so the agent trusts it:

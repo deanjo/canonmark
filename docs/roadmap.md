@@ -6,7 +6,7 @@ current_authority: roadmap-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 ---
 
 # canonmark 路线图
@@ -15,7 +15,7 @@ last_reviewed: 2026-07-28
 
 ## 这个项目是什么(一句话)
 
-把 agong_server 内部已验证的文档治理能力,抽取为一个独立、可配置的开源工具:审计文档头部的「权威标签」,裁决 AI agent 该信哪篇文档,并用 CI 门禁保证标签不腐烂。
+把 agong_server 内部已验证的文档治理能力,抽取为一个独立、可配置的开源工具,目标三件套:① 给文档头部贴机器可校验的「权威标签」,裁决 AI agent 该信哪篇文档;② **让 AI 读任何文档都先读标签、再决定读不读正文**(protocol §3 五步判定,`canon_read` 把这一步变成机制——作废文档不给正文,只给去处);③ 用 CI 门禁保证标签不腐烂。
 
 ## 为什么做成独立仓(不在 agong 内部改)
 
