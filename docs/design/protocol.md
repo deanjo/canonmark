@@ -6,7 +6,7 @@ current_authority: contract-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 ---
 
 # canonmark 权威元数据契约与判定协议
@@ -154,14 +154,14 @@ canonmark 是**检查端**。与之配套的**写作端**是 `technical-plan-sha
 
 **分工**:skill 管「怎么写出合规文档」(靠自觉),canonmark 管「写完了机器验一遍」(靠门禁)。**词汇表与合法矩阵以本节为单一事实源**,写作端引用而非复制——否则加字段、改矩阵要改两处,迟早漂移。
 
-**已知冲突(待裁决,记录在此以免被遗忘),共两处**:
+**已知冲突,共两处——2026-07-29 已由用户裁决:采纳本协议立场,skill §1.5 的映射已改为引用本节**(原冲突记录保留如下,作为「先冻结、后裁决」的先例):
 
 1. skill §1.5 规定「`background-reference` 只能配 `status: background`」,而本节允许 `current + background-reference`。两者不能同时成立,且按 skill 的规则,canonmark 自己的 `vision.md` 是非法文档。
 2. skill §1.5 规定 `historical-evidence` 只能配 `status: archive` 或 `superseded`,而本节 §4 矩阵的 `background` 行明确允许 `background + historical-evidence`。即同一篇 `background + historical-evidence` 文档,canonmark 审计放行(2026-07-28 实测:strict 模式下全门 PASS、exit 0),按 skill 却是非法组合。
 
 本协议的立场与理由:`status` 表示**生命周期**(还在维护吗),`current_authority` 表示**能主导什么**,这是两个正交维度。强行绑定会丢掉「当前维护但不主导」这种常见形态的表达力——`vision.md` 正是此类:它在维护中(不是背景、更不是过期),但不该主导实现。若按 skill 的规则把它标成 `status: background`,反而与事实不符。
 
-裁决前双方都不得单方面改动;这两处冲突本身就是本项目要消灭的形态(两份权威对同一件事给出相反规定),而且**canonmark 检查不到它们**——它只校验自己配置内的一致性,不知道 skill 的存在。这是一条真实的能力边界,见 `acceptance.md`「未验证范围」。
+这两处冲突按「裁决前双方冻结」的规矩走到 2026-07-29 由用户收口,期间无单方面改动。冲突本身就是本项目要消灭的形态(两份权威对同一件事给出相反规定),而且**canonmark 检查不到它们**——它只校验自己配置内的一致性,不知道 skill 的存在。这条能力边界不因裁决消失,见 `acceptance.md`「未验证范围」。
 
 ## 5. fail-closed 语义:缺字段 / 矛盾时怎么办
 

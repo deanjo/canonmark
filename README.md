@@ -102,20 +102,29 @@ gate. So you can adopt one document at a time — tagging a stale design doc wit
 "superseded by v2" is a complete, useful step by itself, and it will not force
 you to go tag v2 and everything v2 points at.
 
-One known exception, so the promise above stays honest: a document whose **very
-first line is a `---` horizontal rule** (or one carrying a UTF-8 BOM before it)
-is read as "has frontmatter but left it unterminated" rather than "has none," and
-that does fail the gate. Narrow, but real — see the "未验证范围" section of
-[docs/acceptance.md](docs/acceptance.md) for why the fix is a trade-off rather
-than an oversight.
+One nuance, so the promise above stays honest: a document whose very first line
+is a `---` **horizontal rule** used to be misread as unterminated frontmatter and
+failed the gate even in gradual mode. Fixed on 2026-07-29: gradual mode now looks
+at what follows the `---` — if it doesn't look like a YAML key, the doc counts as
+simply untagged (a notice, exit 0). A `---` followed by something that *does*
+look like a YAML key still fails in every mode: a real label with a missing
+terminator is an error worth catching. The honest cost of the leniency, recorded
+in [docs/acceptance.md](docs/acceptance.md): a label starting with a YAML comment
+line, or a typo like `status:current` with no space, now reads as "untagged" in
+gradual rather than erroring.
 
 Once a doc library is fully governed, switch it on properly with
 `adoption_mode = "strict"` in `canonmark.toml`, and structural gaps fail again
 (that is how canonmark audits itself).
 
-### Filtering happens before the agent sees the text
+### Going further: `canon_read`, the enforcement layer
 
-A label only helps if something acts on it. `canon_read` is the thing that acts:
+The core of canonmark is the part above: **labels plus the audit gate.** In our
+controlled experiment (see Status), labels alone did most of the work — agents
+went from "plausible guess, please confirm" to a confident, correct call without
+any tooling. `canon_read` builds on that for the cases navigation can't cover: a
+README nobody updated, or an agent landing on a doc directly via search. A label
+only helps if something acts on it. `canon_read` is the thing that acts:
 point it at a retired doc and **the body is not returned at all** — you get its
 status and where to go instead.
 
@@ -179,8 +188,9 @@ P6 added the reading path: `canon read` (contract-filtered delivery), `canon ind
 so the zero-dependency promise holds). P6 went through independent review twice:
 the first round returned REJECT (nine findings); after fixes, the re-review
 returned ACCEPT, with its mandatory follow-ups folded into commit `6e21f78`. The
-matching acceptance rows (A17/A18) deliberately stay `INSUFFICIENT_EVIDENCE`
-until a human decides to flip them. A controlled experiment on the labelling
+matching acceptance rows (A17/A18) stayed `INSUFFICIENT_EVIDENCE` until a human
+decided; on 2026-07-29 the user flipped both to PASS on the strength of that
+re-review. A controlled experiment on the labelling
 question is written up in [docs/acceptance.md](docs/acceptance.md) — including the
 part it failed to show, which is that `canon_read`'s benefit *over labels alone*
 remains unproven at the scale tested.

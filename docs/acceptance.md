@@ -24,7 +24,7 @@ last_reviewed: 2026-07-29
 | A4 | P2 | src 无 agong 专属依赖 | `grep -ri` src/ | 仅注释/默认配置值,无代码依赖 | 命中全在注释/config 默认值 | PASS |
 | A5 | P2 | 纯标准库 + 可选 PyYAML 可跑 | `pip install -e . && canon --help` | 退出码 0 | canon/audit --help exit 0 | PASS |
 | A6 | P3 | canonmark 自审自身全 PASS | `canon audit docs/ --config canonmark.toml` | 全部 gate PASS,exit 0 | 全门 PASS,exit 0(门数随阶段增加,以命令输出为准) | PASS |
-| A7 | P3 | pre-commit + CI 各真跑绿一次 | `pre-commit run --all-files` + CI pipeline | 两条路均绿 | 本地 `Passed` exit 0，**但有两个未写出的前提**：`.git/hooks/pre-commit` 并未安装（需 `pre-commit install`），且 `canon` 不在系统 PATH 上（需把 venv 的 bin 加进 PATH，否则报 `Executable canon not found`）。**所以「本地提交会自动挡住脏文档」在当前 checkout 上并不成立**——跑得通的是手动触发那条路。远端 CI 无 remote，从未跑过 | PASS(手动触发) |
+| A7 | P3 | pre-commit + CI 各真跑绿一次 | `pre-commit run --all-files` + CI pipeline | 两条路均绿 | 2026-07-29 双路收口:本地——`pre-commit install` 已装入本仓与全新 clone,双向实测(坏 frontmatter 提交被钩子拦下 exit 1、干净提交放行);PATH 前提保留(提交环境需把 venv 的 bin 加进 PATH,否则报 `Executable canon not found`)。远端——私有仓 PR#1 首跑 CI,tests 与 self-audit 两 job 均 pass(actions run 30432342592)。此前「钩子未装、CI 从未跑」的诚实披露见 git 历史 | PASS |
 | A8 | P4 | INVALID fixture 精确报中 6 处埋雷 | `pytest tests/test_fixtures.py` | 恰好 6 类问题 | **P5 曾无声打破此项**(fixture 不被任何测试引用,gradual 把其中 2 处埋雷降级为提示),独立验收查出;修法:fixture 配置声明 `adoption_mode = "strict"`,并新建 `tests/test_fixtures.py` 把双向 oracle 接进 pytest,不再依赖人工跑 CLI | PASS |
 | A9 | P4 | VALID fixture 一处不报 | `pytest tests/test_fixtures.py` | 无 issue 亦无 notice | **P5 曾无声打破此项**:valid fixture 里 `old-notes.md` 声称被 `replacement.md` 取代而对方未认领——正是项目文档记载的「自家后院的单边声明」,T10 上线后被抓出。已给 `replacement.md` 补 `supersedes`,该现行犯就此归案 | PASS |
 | A10 | P4 | 改配置不改代码即换项目 | 同 fixture,两份 config 翻转口径 | 结果翻转,.py 零改动 | A3 md5 佐证 .py 未改 | PASS |
@@ -36,12 +36,12 @@ last_reviewed: 2026-07-29
 | A20 | P5 | 存量项目装上不当场变红(渐进采用) | 对零 frontmatter 的老项目跑 `canon audit` | 无任何 gate FAIL,**exit 0**,提示指路 | 零标签老项目实测:全门 PASS、有指路提示、exit 0;提示条数随门数与项目形态而变,不在此复制(当时夹具未入库,复现请对任意零标签项目跑命令栏命令) | PASS |
 | A21 | P5 | 贴第一张作废标签不触发连锁强制 | 旧文档声明被未治理的新文档取代 | 不判失败,只提示补标签 | V5 降级为「替代目标尚未纳入治理」提示,exit 0 | PASS |
 | A22 | P5 | strict 模式下结构性缺失照旧判失败 | `pytest tests/ -k strict_still_fails` | 缺 frontmatter / 缺导航均 FAIL | 全绿;canonmark 自身 strict 全门 PASS | PASS |
-| A17 | P6 | `canon_read` 对作废文档不返回正文 | `pytest tests/test_read.py tests/test_mcp.py` | 返回替代目标,**正文不出现在输出中** | 哨兵串断言:CLI 层与 MCP 工具调用层双双不泄漏正文;另断言输出长度**不随文档变长而增长**(测试把同一篇作废文档撑长两千行,输出字节数一字不变) | INSUFFICIENT_EVIDENCE |
-| A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例 | INSUFFICIENT_EVIDENCE |
+| A17 | P6 | `canon_read` 对作废文档不返回正文 | `pytest tests/test_read.py tests/test_mcp.py` | 返回替代目标,**正文不出现在输出中** | 哨兵串断言:CLI 层与 MCP 工具调用层双双不泄漏正文;另断言输出长度**不随文档变长而增长**(测试把同一篇作废文档撑长两千行,输出字节数一字不变)。2026-07-29 用户裁决:据复验 ACCEPT 置 PASS | PASS |
+| A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例。2026-07-29 用户裁决:据复验 ACCEPT 置 PASS | PASS |
 | A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 见下「A19 对照实验记录」 | 答案取自现行文档,非作废文档 | **四组实测,结论与预期不同**:标签的价值成立(无标签组只能推理并明确要求人确认),但 `canon_read` 的**增量**价值在本实验规模下未体现——有标签组不用工具也答对了。详见下节,含实验设计缺陷的自陈 | INSUFFICIENT_EVIDENCE |
 | A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 待 P7 开工(T9),发布拍板在用户;原状态误用表外第六态 PENDING,2026-07-29 更正为五态内取值 | BLOCKED |
 
-**A17/A18 状态说明(2026-07-28 记)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。A17/A18 是否据此由 INSUFFICIENT_EVIDENCE 置 PASS,待用户拍板;拍板前维持原状态值。
+**A17/A18 状态说明(2026-07-28 记,2026-07-29 更新)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。2026-07-29 用户裁决:据复验 ACCEPT 将 A17/A18 由 INSUFFICIENT_EVIDENCE 置 PASS。A19 维持 INSUFFICIENT_EVIDENCE——那是实验自身的局限(增量价值未证),不随本裁决改变。
 
 ## A19 对照实验记录
 
@@ -88,10 +88,11 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 ## 未验证范围(诚实边界)
 
 - GitHub 远程发布(A12 之后)不由 agent 执行,留用户拍板。
-- **本地 pre-commit 钩子未安装**:`.pre-commit-config.yaml` 写好了、手动 `pre-commit run` 也绿,但 `.git/hooks/pre-commit` 不存在,且 `canon` 不在系统 PATH 上。即「自动挡住脏文档」这条负反馈回路在当前 checkout 上是断的,需要 `pre-commit install` 加把 venv 的 bin 放进 PATH 才闭合。
+- **本地 pre-commit 钩子已收口(2026-07-29)**:本仓与全新 clone 均已 `pre-commit install`,双向实测——docs/design/ 下无 frontmatter 文档的提交被钩子拦下(exit 1),干净提交放行;全新 clone 从零走通(clone → venv → `pip install -e .` + `pip install pre-commit` → install → 提交)。PATH 前提仍在:提交环境需把 venv 的 bin 加进 PATH(如 `PATH="$PWD/.venv/bin:$PATH"`),否则钩子报 `Executable canon not found`。
 - **Python 版本**:`pyproject.toml` 声明 `>=3.9`,但 CI 只跑 3.11、本地是 3.14,3.9/3.10 从未实测。
-- **写作端 skill 与本协议的权威映射冲突(两处)未裁决**,见 `design/protocol.md` §4.1。canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。
+- **写作端 skill 与本协议的权威映射冲突(两处)已于 2026-07-29 由用户裁决**:采纳协议立场,skill §1.5 映射已改为引用 `design/protocol.md` §4.1。能力边界不因裁决消失:canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。
 - Windows 首跑(CRLF/BOM/反斜杠路径)第一版不覆盖,列入风险。
 - agong_server 侧的实际接入(换用 canonmark + 写 agong 配置)不在本项目范围,是 agong 侧后续。
-- **已知边界(P5 独立验收发现,未修)**:`Frontmatter.absent` 按「首行是不是 `---`」判定,因此一篇以 Markdown 水平线 `---` 开头的存量文档会被当作「已贴标签」,在 `gradual` 下照旧判失败,与渐进采用的承诺相悖。场景窄但真实。修法需权衡——若改成「找不到闭合 `---` 就视为没有 frontmatter」,则「真写了标签却忘了闭合」会被降级为提示,可能放过真错误。留待拍板。
+- **已知边界(2026-07-29 钩子实测发现,独立复验修正范围后坐实;修法待拍板,决策项⑨)**:V5 只强制「关键文档」,而关键文档按位置与信号判定——默认只有 key 目录(`design`/`tasks`/`gates`)下的文档,或命中关键文件名正则、带权威信号、自带 `current_authority` 的文档才进 V5(目录清单见 `src/canonmark/config.py`)。**其余位置(docs 根、任何非 key 目录)的文档零校验**:一篇 `status: bogus-value` 的三字段文档在 gradual 与 strict 下均静默全 PASS,连枚举合法性都不查(docs 根与 docs/misc/ 两处实测坐实)。该豁免有其用途(progress.md 这类普通文档按 protocol §1 只需三字段,强制八字段会误报),但「非关键位置的垃圾标签零校验」此前无任何记录。最小修法方向(未拍板):任何带 frontmatter 的文档无论位置,至少校验 status 枚举合法性与 superseded 指针一致性。
+- **已修(2026-07-29,用户拍板)**:水平线边界——首行为 `---` 水平线的存量文档曾被当作「已贴标签」,在 `gradual` 下误判失败(P5 独立验收发现)。实际采用的修法与早前记载的候选(「按找不到闭合判」)不同:gradual 下看 `---` 后**首个非空行像不像 YAML 键值对**,不像即视为未纳入治理(提示,exit 0);strict 维持旧行为;`---` 后跟键值对但缺闭合的,任何模式照旧报错——「真写了标签却忘了闭合」不放过。判定收敛于 `parse_frontmatter` 单一入口,`canon read` 同步;回退变异 3 条测试红;独立复验 ACCEPT(10 组边界探针)。**本修法的已知代价(复验探针发现,如实记录)**:① 合法标签若以 YAML 注释行开头,gradual 下整篇被静默视为未治理,真实标签失效;② `status:current` 这类冒号后无空格的手误,旧行为报「顶层必须是键值映射」,新行为在 gradual 下静默视为未贴标签。两者都是「误判方向一律朝提示」这一拍板取向的直接代价,记录在此防遗忘。
 - **正文语义矛盾不在 canonmark 能力范围内**:本工具检查的是标签层(取代关系、状态合法性、导航与标签互检)。两篇文档正文里对同一件事给出相反说法(P6 期间的实例:`kickoff.md` 的「本次不做」清单含 MCP server,而 roadmap P6 / T14 要做——已按 protocol §5.4「事实优先」更正 kickoff,但这个矛盾**当初是人发现的,不是机器**),标签层完全合规,机器抓不到。这类冲突仍需人或 AI 判断。
