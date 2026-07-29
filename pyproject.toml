@@ -26,7 +26,7 @@ dev = ["pytest>=7.0", "PyYAML>=6.0"]
 canon = "canonmark.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/canonmark/canonmark"
+Homepage = "https://github.com/deanjo/canonmark"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canonmark"]
