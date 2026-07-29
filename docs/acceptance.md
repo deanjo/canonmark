@@ -87,7 +87,7 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 
 ## 未验证范围(诚实边界)
 
-- GitHub 远程发布(A12 之后)不由 agent 执行,留用户拍板。
+- GitHub 远程公开发布已于 2026-07-29 执行:用户明示「公开」拍板后由 agent 代执行,仓库现为 public——「发布永不自动执行」的铁律全程被遵守(从未由 agent 擅动)。PyPI 发布未立项,不在本表。
 - **本地 pre-commit 钩子已收口(2026-07-29)**:本仓与全新 clone 均已 `pre-commit install`,双向实测——docs/design/ 下无 frontmatter 文档的提交被钩子拦下(exit 1),干净提交放行;全新 clone 从零走通(clone → venv → `pip install -e .` + `pip install pre-commit` → install → 提交)。PATH 前提仍在:提交环境需把 venv 的 bin 加进 PATH(如 `PATH="$PWD/.venv/bin:$PATH"`),否则钩子报 `Executable canon not found`。
 - **Python 版本**:`pyproject.toml` 声明 `>=3.9`,但 CI 只跑 3.11、本地是 3.14,3.9/3.10 从未实测。
 - **写作端 skill 与本协议的权威映射冲突(两处)已于 2026-07-29 由用户裁决**:采纳协议立场,skill §1.5 映射已改为引用 `design/protocol.md` §4.1。能力边界不因裁决消失:canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。

@@ -195,9 +195,9 @@ question is written up in [docs/acceptance.md](docs/acceptance.md) — including
 part it failed to show, which is that `canon_read`'s benefit *over labels alone*
 remains unproven at the scale tested.
 
-Not yet published to PyPI, and not yet public on GitHub (the repo exists as a
-private backup with CI). Public release is deliberately the last step and is
-left to a human decision — this repo will not publish itself. See
+Public on GitHub since 2026-07-29 — by an explicit human decision; the release
+step was deliberately never automated. Not yet published to PyPI — install from
+source for now. See
 [docs/acceptance.md](docs/acceptance.md) for the verification matrix and
 [docs/progress.md](docs/progress.md) for the current state.
 
