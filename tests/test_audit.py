@@ -922,7 +922,7 @@ last_reviewed: 2026-07-10
 
     self.assertFalse(self.key_document(relative, content))
     self.assertEqual([], result.issues)
-    self.assertEqual("4 篇关键文档", result.checked)
+    self.assertEqual("4 篇关键文档，1 篇已贴标签普通文档", result.checked)
 
   def test_v5_ordinary_readme_with_malformed_frontmatter_fails(self) -> None:
     self.write_required_v5_documents()
@@ -1585,6 +1585,146 @@ class AdoptionModeTest(AuditTestBase):
         "  提示 docs/a.md:1 - 未纳入治理\n",
         output.getvalue(),
     )
+
+
+class LabeledOrdinaryDocumentBaselineTest(AuditTestBase):
+  """决策⑨：贴了标签的普通文档也要过底线校验，位置不是豁免理由。
+
+  此前 V5 只强制关键文档，docs 根 / 非 key 目录下 status: bogus-value 的
+  三字段文档在两种模式下都静默全 PASS。底线只有两条：status 枚举合法、
+  superseded 指针一致（protocol §5.2 的两条矛盾规则）；三字段简化形态
+  （status/owner/last_reviewed）必须继续合法。
+  """
+
+  BOTH_MODES = (None, STRICT)
+
+  def mode_name(self, config: GovernanceConfig | None) -> str:
+    return config.adoption_mode if config else "gradual"
+
+  def simple_document(self, status_line: str, extra: str = "") -> str:
+    """生成仿 progress.md 的三字段普通文档，可插入额外字段。"""
+    return (
+        f"---\n{status_line}\n{extra}owner: canonmark\n"
+        "last_reviewed: 2026-07-10\n---\n# 普通文档\n\n正文。\n"
+    )
+
+  def test_bogus_status_in_docs_root_fails_in_both_modes(self) -> None:
+    self.write("docs/notes.md", self.simple_document("status: bogus-value"))
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        issues = self.v5_issues_for("docs/notes.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn("status 取值非法：bogus-value", issues[0].message)
+
+    # 计数语不许撒谎：这篇文档被检查了，就要出现在检查范围里。
+    result = DOCS_AUDIT.audit_v5(self.root)
+    self.assertEqual("0 篇关键文档，1 篇已贴标签普通文档", result.checked)
+
+  def test_bogus_status_in_non_key_directory_fails_in_both_modes(self) -> None:
+    self.write(
+        "docs/misc/notes.md", self.simple_document("status: bogus-value")
+    )
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        issues = self.v5_issues_for("docs/misc/notes.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn("status 取值非法：bogus-value", issues[0].message)
+
+  def test_superseded_without_pointer_fails_in_both_modes(self) -> None:
+    for relative, extra in (
+        ("docs/no-field.md", ""),
+        ("docs/empty-list.md", "superseded_by: []\n"),
+    ):
+      self.write(relative, self.simple_document("status: superseded", extra))
+
+    for config in self.BOTH_MODES:
+      for relative in ("docs/no-field.md", "docs/empty-list.md"):
+        with self.subTest(mode=self.mode_name(config), relative=relative):
+          issues = self.v5_issues_for(relative, config)
+          self.assertEqual(1, len(issues))
+          self.assertIn(
+              "status=superseded 时 superseded_by 必须指向替代文档",
+              issues[0].message,
+          )
+
+  def test_current_with_pointer_fails_in_both_modes(self) -> None:
+    self.write(
+        "docs/notes.md",
+        self.simple_document(
+            "status: current", "superseded_by:\n  - new.md\n"
+        ),
+    )
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        issues = self.v5_issues_for("docs/notes.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn(
+            "status=current 时 superseded_by 必须为空", issues[0].message
+        )
+
+  def test_current_with_scalar_pointer_fails_in_both_modes(self) -> None:
+    """superseded_by 写成标量字符串（形状错）时，current 带指针照样要罚。
+
+    独立复验抓出的 fail-open 形状：列表判空 helper 只认列表，标量在
+    「current 不得带指针」上曾静默漏网。
+    """
+    self.write(
+        "docs/notes.md",
+        self.simple_document("status: current", "superseded_by: new.md\n"),
+    )
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        issues = self.v5_issues_for("docs/notes.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn(
+            "status=current 时 superseded_by 必须为空", issues[0].message
+        )
+
+  def test_valid_simple_frontmatter_document_stays_legal(self) -> None:
+    """硬回归约束：三字段简化形态（仿 docs/progress.md）必须继续合法。"""
+    self.write("docs/progress.md", self.simple_document("status: current"))
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        result = DOCS_AUDIT.audit_v5(self.root, config)
+        self.assertEqual([], result.issues)
+        self.assertEqual([], result.notices)
+
+  def test_untagged_ordinary_document_behavior_is_unchanged(self) -> None:
+    """完全没有 frontmatter 的非关键文档不进底线校验：两种模式都零输出。"""
+    self.write("docs/misc/legacy.md", "# Legacy\n\n正文。\n")
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        result = DOCS_AUDIT.audit_v5(self.root, config)
+        self.assertEqual([], result.issues)
+        self.assertEqual([], result.notices)
+
+  def test_horizontal_rule_document_stays_out_of_baseline_check(self) -> None:
+    """gradual 水平线宽松判定不得回退：被判「未治理」的不算贴了标签。"""
+    self.write("docs/notes.md", "---\n\n# 旧笔记\n\n---\n\n尾注。\n")
+
+    result = DOCS_AUDIT.audit_v5(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual([], result.notices)
+
+  def test_malformed_frontmatter_in_non_key_location_still_fails(self) -> None:
+    """第 3 点现状锁定：坏 YAML 的非关键文档此前已被罚，保持不动。"""
+    self.write(
+        "docs/misc/broken.md",
+        "---\nstatus: [current\nowner: x\n---\n# Broken\n",
+    )
+
+    for config in self.BOTH_MODES:
+      with self.subTest(mode=self.mode_name(config)):
+        issues = self.v5_issues_for("docs/misc/broken.md", config)
+        self.assertEqual(1, len(issues))
+        self.assertIn("YAML frontmatter 非法", issues[0].message)
 
 
 if __name__ == "__main__":

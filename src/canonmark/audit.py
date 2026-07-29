@@ -7,7 +7,8 @@
 各门（权威清单是 :data:`SUPPORTED_GATES`，本表由测试守住不许与之漂移）：
   V2  目录命名（kebab-case + 白名单 + archive 历史豁免）
   V4  含 ≥2 文件的非纯资产目录必须有 README
-  V5  关键文档 frontmatter 契约（本模块最大的一块）
+  V5  frontmatter 契约（本模块最大的一块）：关键文档查全字段；
+      其余贴了标签的文档查底线（status 枚举 + superseded 指针一致）
   V9  总导航必须链接全部正式顶层目录
   V10 活文档相对链接与 docs/...:line 引用不得断
   V11 防腐烂：导航与标签互检判失败；久未复核与孤儿文档只提示
@@ -988,7 +989,12 @@ def explicit_v5_documents(
 
 
 def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
-  """V5：关键文档必须在顶部 frontmatter 中包含必备字段。"""
+  """V5：关键文档必须含全部必备字段；其余贴了标签的文档校验标签底线。
+
+  底线 = status 枚举合法 + superseded 指针一致（protocol §5.2 的两条矛盾
+  规则）。完全没有 frontmatter 的文档不进底线校验（gradual 的水平线宽松
+  判定同样视为未贴标签）。
+  """
   config = _cfg(config)
   docs_dir = root / config.docs_root
   required_fields = config.required_frontmatter_fields
@@ -1006,6 +1012,7 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   required, kickoff_documents = explicit_v5_documents(docs_dir, config)
   key_documents = set(required) | kickoff_documents
   malformed_frontmatter_documents: set[Path] = set()
+  labeled_documents: set[Path] = set()
 
   for path in all_markdown:
     if path.is_relative_to(docs_dir / config.archive_directory_name):
@@ -1015,6 +1022,8 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     # absent 已含文档级结论（gradual 下水平线开头也算 absent），不再重看首行。
     if not frontmatter.absent and frontmatter.error is not None:
       malformed_frontmatter_documents.add(path)
+    elif not frontmatter.absent:
+      labeled_documents.add(path)
     if (
         is_key_document(path, docs_dir, frontmatter, text, config)
         or technical_plan_expected_authority(path, text, config) is not None
@@ -1313,7 +1322,63 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
             f"superseded_by 替代链形成环路：{cycle_text}",
             root,
         )
-  result.checked = f"{len(key_documents)} 篇关键文档"
+
+  # 决策⑨：关键文档之外，任何贴了标签（frontmatter 可解析）的文档也要过
+  # 底线校验——status 枚举合法、superseded 指针一致（protocol §5.2 的两条
+  # 矛盾规则）。位置不是豁免理由：此前 docs 根下 status: bogus-value 的
+  # 三字段文档在两种模式下都静默全 PASS。「没做的事不罚，做错的事才罚」——
+  # 它贴了标签且贴错了。刻意不升级为八字段契约：三字段简化形态
+  # （status/owner/last_reviewed）仍然合法，缺 status 的也不罚。
+  ordinary_labeled_documents = labeled_documents - key_documents
+  for path in sorted(ordinary_labeled_documents):
+    frontmatter = parse_frontmatter(path, config)
+    if "status" not in frontmatter.fields:
+      continue
+    status_error = frontmatter_string_error(frontmatter, "status")
+    if status_error:
+      result.add(path, frontmatter.fields["status"], status_error, root)
+      continue
+    status = normalized_frontmatter_value(frontmatter, "status")
+    if status not in config.allowed_statuses:
+      result.add(
+          path,
+          frontmatter.fields["status"],
+          f"status 取值非法：{status}",
+          root,
+      )
+    superseded_value = frontmatter.values.get("superseded_by")
+    # 「非空」按语义而非形状判：标量字符串 superseded_by: new.md 同样是带
+    # 指针（独立复验抓出的 fail-open 形状），空列表与纯空白字符串才算空。
+    current_has_pointer = bool(superseded_value) and not (
+        isinstance(superseded_value, str) and not superseded_value.strip()
+    )
+    if status == "current" and current_has_pointer:
+      result.add(
+          path,
+          frontmatter.fields["superseded_by"],
+          "status=current 时 superseded_by 必须为空",
+          root,
+      )
+    if status == "superseded" and not frontmatter_collection_has_items(
+        path, frontmatter, "superseded_by"
+    ):
+      result.add(
+          path,
+          frontmatter.fields.get(
+              "superseded_by", frontmatter.fields["status"]
+          ),
+          "status=superseded 时 superseded_by 必须指向替代文档",
+          root,
+      )
+
+  # 计数语如实反映检查范围：贴错 YAML 的普通文档也在上面第一个循环里查过。
+  ordinary_checked = (
+      labeled_documents | malformed_frontmatter_documents
+  ) - key_documents
+  result.checked = (
+      f"{len(key_documents)} 篇关键文档，"
+      f"{len(ordinary_checked)} 篇已贴标签普通文档"
+  )
   return result
 
 
