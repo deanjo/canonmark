@@ -12,7 +12,7 @@ license = "MIT"
 authors = [{ name = "canonmark contributors" }]
 keywords = ["documentation", "ai-agents", "governance", "frontmatter", "docs-as-code", "pre-commit"]
 
-# 运行时零硬依赖:V2/V4/V9 纯标准库即可跑;读 frontmatter 的门(V5/V10/V11)需要
+# 运行时零硬依赖:V2/V4/V9/V12/V13 纯标准库即可跑;读 frontmatter 的门(V5/V10/V11)需要
 # PyYAML(可选)。**读标签的子命令(read / index / mcp)同样需要 PyYAML**——
 # 没装时它们一律明确报错,绝不静默把整库当成「无标签」。
 # 这份划分由 tests/test_contract.py 实测守住,不靠人记得更新。

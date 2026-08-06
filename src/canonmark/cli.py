@@ -139,12 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
       "--gates",
       type=parse_gate_list,
       metavar="V2,V4,...",
-      help="执行指定 gate，可选 V2,V4,V5,V9,V10,V11",
+      help="执行指定 gate，可选 V2,V4,V5,V9,V10,V11,V12,V13",
   )
   selection.add_argument(
       "--all",
       action="store_true",
-      help="执行全部 gate（缺省行为）：V2,V4,V5,V9,V10,V11",
+      help="执行全部 gate（缺省行为）：V2,V4,V5,V9,V10,V11,V12,V13",
   )
 
   read = subparsers.add_parser(

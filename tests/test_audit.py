@@ -1727,5 +1727,334 @@ class LabeledOrdinaryDocumentBaselineTest(AuditTestBase):
         self.assertIn("YAML frontmatter 非法", issues[0].message)
 
 
+class FrameworkGateTestBase(AuditTestBase):
+  """V12/V13 共用夹具：任务框架根 = 含状态文件的目录（自身不含用例）。"""
+
+  STATUS_PATH = "docs/plan/01_EXECUTION_CONTROL.md"
+  BUDGET_KEYS = ("lines", "files", "evidence-files", "evidence-runs")
+
+  def registry(self, rows: str = "| T1 | READY | 2026-08-01 |\n") -> str:
+    """生成一张合法的状态登记表。"""
+    return "| id | status | updated_at |\n| --- | --- | --- |\n" + rows
+
+  def write_status(self, body: str | None = None) -> Path:
+    """写入框架根的状态文件；缺省为带合法登记表的最小内容。"""
+    if body is None:
+      body = "# 执行总台\n\n" + self.registry()
+    return self.write(self.STATUS_PATH, body)
+
+  def write_over_budget_framework(self) -> None:
+    """写一个四项预算全部超限（相对 tiny 阈值）的框架。"""
+    self.write_status()
+    self.write("docs/plan/notes.md", "正文。\n" * 8)
+    self.write("docs/plan/extra.md", "正文。\n" * 8)
+    for run in ("r1", "r2"):
+      self.write(f"docs/plan/evidence/T1/{run}/log.txt", "输出\n")
+      self.write(f"docs/plan/evidence/T1/{run}/cmd.txt", "命令\n")
+
+
+class FrameworkBudgetTest(FrameworkGateTestBase):
+  """V12 任务框架预算：软阈值只提示；硬阈值判失败，批准行显式放行。"""
+
+  # 让 write_over_budget_framework 恰好只超软阈值 / 全部超硬阈值的两套配置。
+  SOFT_ONLY = GovernanceConfig(
+      framework_lines_soft_limit=10,
+      framework_lines_hard_limit=1000,
+      framework_files_soft_limit=2,
+      framework_files_hard_limit=100,
+      evidence_files_soft_limit=2,
+      evidence_files_hard_limit=100,
+      evidence_runs_soft_limit=1,
+      evidence_runs_hard_limit=100,
+  )
+  TINY_HARD = GovernanceConfig(
+      framework_lines_soft_limit=1,
+      framework_lines_hard_limit=2,
+      framework_files_soft_limit=1,
+      framework_files_hard_limit=1,
+      evidence_files_soft_limit=1,
+      evidence_files_hard_limit=1,
+      evidence_runs_soft_limit=1,
+      evidence_runs_hard_limit=1,
+  )
+
+  def test_no_framework_root_is_a_pass(self) -> None:
+    """找不到任何框架根 → 不适用，PASS 且零输出。"""
+    self.write("docs/design/ordinary.md", "# 普通文档\n\n正文。\n")
+
+    result = DOCS_AUDIT.audit_v12(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual([], result.notices)
+    self.assertEqual("0 个任务框架根", result.checked)
+
+  def test_framework_within_budget_reports_nothing(self) -> None:
+    self.write_status()
+    self.write("docs/plan/notes.md", "# 备注\n\n正文。\n")
+    self.write("docs/plan/evidence/T1/r1/log.txt", "输出\n")
+
+    result = DOCS_AUDIT.audit_v12(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual([], result.notices)
+    self.assertEqual("1 个任务框架根", result.checked)
+
+  def test_soft_threshold_breach_is_only_a_notice(self) -> None:
+    self.write_over_budget_framework()
+
+    result = DOCS_AUDIT.audit_v12(self.root, self.SOFT_ONLY)
+
+    self.assertEqual([], result.issues)
+    messages = [note.message for note in result.notices]
+    for key in self.BUDGET_KEYS:
+      with self.subTest(check_key=key):
+        self.assertTrue(
+            any(
+                f"检查键 {key}" in message and "超软阈值" in message
+                for message in messages
+            ),
+            f"未提示软阈值超限 {key}：{messages}",
+        )
+
+  def test_hard_threshold_breach_without_approval_fails(self) -> None:
+    self.write_over_budget_framework()
+
+    result = DOCS_AUDIT.audit_v12(self.root, self.TINY_HARD)
+
+    messages = [issue.message for issue in result.issues]
+    for key in self.BUDGET_KEYS:
+      with self.subTest(check_key=key):
+        matched = [
+            message
+            for message in messages
+            if f"检查键 {key}" in message and "超硬阈值" in message
+        ]
+        self.assertEqual(1, len(matched), f"未报硬阈值超限 {key}：{messages}")
+        # 报错必须自带修法：实测值、阈值、以及可照抄的批准行写法。
+        self.assertIn("实测", matched[0])
+        self.assertIn(f"批准: {key}", matched[0])
+
+  def test_approval_line_downgrades_hard_breach_to_notice(self) -> None:
+    self.write_over_budget_framework()
+    self.write_status(
+        "# 执行总台\n\n"
+        + self.registry()
+        + "\n批准: lines 历史文档合并保留 2026-08-06\n"
+        "批准: files 分片确有必要 2026-08-06\n"
+        "批准: evidence-files 保留全部运行证据 2026-08-06\n"
+        "批准: evidence-runs 多轮返工留痕 2026-08-06\n"
+    )
+
+    result = DOCS_AUDIT.audit_v12(self.root, self.TINY_HARD)
+
+    self.assertEqual([], result.issues)
+    messages = [note.message for note in result.notices]
+    for key in self.BUDGET_KEYS:
+      with self.subTest(check_key=key):
+        self.assertTrue(
+            any(
+                "已由状态文件批准放行" in message and f"批准: {key}" in message
+                for message in messages
+            ),
+            f"批准行未生效 {key}：{messages}",
+        )
+
+  def test_approval_matches_check_key_as_whole_token(self) -> None:
+    """`批准: evidence-files ...` 不得顺带放行 files；批准逐项生效。"""
+    self.write_over_budget_framework()
+    self.write_status(
+        "# 执行总台\n\n"
+        + self.registry()
+        + "\n批准: evidence-files 保留全部运行证据 2026-08-06\n"
+    )
+
+    result = DOCS_AUDIT.audit_v12(self.root, self.TINY_HARD)
+
+    issue_messages = [issue.message for issue in result.issues]
+    self.assertTrue(
+        any("检查键 files" in message for message in issue_messages),
+        f"files 被 evidence-files 的批准行错误放行：{issue_messages}",
+    )
+    self.assertFalse(
+        any("检查键 evidence-files" in message for message in issue_messages)
+    )
+
+  def test_evidence_content_does_not_count_into_framework_budget(self) -> None:
+    """evidence 下的 Markdown 是运行产物，不计入框架行数与文件数。"""
+    self.write_status()
+    self.write("docs/plan/evidence/T1/r1/huge.md", "证据行\n" * 900)
+
+    result = DOCS_AUDIT.audit_v12(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual([], result.notices)
+
+  def test_status_file_copied_into_evidence_is_not_a_framework_root(self) -> None:
+    """归档进 evidence 的状态文件副本不得再造出一个框架根。"""
+    self.write_status()
+    self.write(
+        "docs/plan/evidence/T1/r1/01_EXECUTION_CONTROL.md", "# 副本\n"
+    )
+
+    result = DOCS_AUDIT.audit_v12(self.root)
+
+    self.assertEqual("1 个任务框架根", result.checked)
+
+
+class StatusRegistryTest(FrameworkGateTestBase):
+  """V13 状态登记表：状态只准记录在状态文件的登记表里。"""
+
+  def test_no_framework_root_is_a_pass(self) -> None:
+    self.write("docs/design/ordinary.md", "# 普通文档\n\n结论 PASS。\n")
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual([], result.notices)
+    self.assertEqual("0 个任务框架根", result.checked)
+
+  def test_valid_registry_passes(self) -> None:
+    self.write_status(
+        "# 执行总台\n\n"
+        + self.registry(
+            "| T1 | READY | 2026-08-01 |\n| T2 | PASS | 2026-08-02 |\n"
+        )
+    )
+    self.write("docs/plan/notes.md", "# 备注\n\n普通正文，无状态词。\n")
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual([], result.issues)
+    self.assertEqual("1 个任务框架根", result.checked)
+
+  def test_header_tolerates_pipe_and_spacing_variance(self) -> None:
+    for header, row in (
+        ("| id | status | updated_at |", "| T1 | READY | 2026-08-01 |"),
+        ("id | status | updated_at", "T1 | READY | 2026-08-01"),
+        ("|id|status|updated_at|", "|T1|READY|2026-08-01|"),
+    ):
+      with self.subTest(header=header):
+        self.write_status(f"# 总台\n\n{header}\n| --- | --- | --- |\n{row}\n")
+
+        self.assertEqual([], DOCS_AUDIT.audit_v13(self.root).issues)
+
+  def test_missing_registry_fails(self) -> None:
+    self.write_status("# 执行总台\n\n没有登记表，只有正文。\n")
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertIn("缺少状态登记表", result.issues[0].message)
+    self.assertIn("id | status | updated_at", result.issues[0].message)
+
+  def test_multiple_registries_fail(self) -> None:
+    self.write_status(
+        "# 执行总台\n\n" + self.registry() + "\n" + self.registry()
+    )
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertIn("必须恰好一个", result.issues[0].message)
+    self.assertIn("2 个", result.issues[0].message)
+    # 锚在第二张表头行：3 行头部 + 3 行第一张表 + 1 行空行 → 第 7 行。
+    self.assertEqual(7, result.issues[0].line)
+
+  def test_duplicate_id_fails_with_line_number(self) -> None:
+    self.write_status(
+        "# 总台\n\n"
+        + self.registry(
+            "| T1 | READY | 2026-08-01 |\n| T1 | PASS | 2026-08-02 |\n"
+        )
+    )
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertIn("id 重复：T1", result.issues[0].message)
+    self.assertEqual(6, result.issues[0].line)
+
+  def test_invalid_status_fails_with_line_number(self) -> None:
+    self.write_status("# 总台\n\n" + self.registry("| T1 | DONE | 2026-08-01 |\n"))
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertIn("status 取值非法：DONE", result.issues[0].message)
+    self.assertIn("可选值", result.issues[0].message)
+    self.assertEqual(5, result.issues[0].line)
+
+  def test_backticked_registry_cells_are_accepted(self) -> None:
+    """状态文件惯用 `READY` 这类行内代码写法，与裸值同义。"""
+    self.write_status(
+        "# 总台\n\n" + self.registry("| `T1` | `READY` | 2026-08-01 |\n")
+    )
+
+    self.assertEqual([], DOCS_AUDIT.audit_v13(self.root).issues)
+
+  def test_status_enum_is_configurable(self) -> None:
+    config = GovernanceConfig(status_registry_statuses=frozenset({"DONE"}))
+    self.write_status("# 总台\n\n" + self.registry("| T1 | DONE | 2026-08-01 |\n"))
+
+    self.assertEqual([], DOCS_AUDIT.audit_v13(self.root, config).issues)
+
+  def test_status_word_outside_registry_trips(self) -> None:
+    self.write_status()
+    self.write(
+        "docs/plan/notes.md", "# 备注\n\n结论：PASS，可以合并。\n"
+    )
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertEqual("docs/plan/notes.md", result.issues[0].path)
+    self.assertEqual(3, result.issues[0].line)
+    self.assertIn("状态只准记录于", result.issues[0].message)
+    self.assertIn("PASS", result.issues[0].message)
+
+  def test_tripwire_only_matches_standalone_uppercase_tokens(self) -> None:
+    """绊线认独立大写 token：拼接标识符与小写不算。"""
+    self.write_status()
+    self.write(
+        "docs/plan/notes.md",
+        "PASS_GATE_G0 已归档。\n"
+        "G1B-PASS 不算独立 token。\n"
+        "passed 小写不算。\n"
+        "独立验收 PASS\n",
+    )
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertEqual(4, result.issues[0].line)
+
+  def test_tripwire_exempts_status_file_evidence_and_fenced_code(self) -> None:
+    """状态文件自身、evidence 目录与 fenced code block 都不进绊线。"""
+    self.write_status(
+        "# 执行总台\n\n" + self.registry() + "\n正文提到 PASS 也不绊：状态文件豁免。\n"
+    )
+    self.write("docs/plan/evidence/T1/r1/verdict.md", "结论 PASS。\n")
+    self.write(
+        "docs/plan/notes.md",
+        "# 备注\n\n```\n示例输出：PASS\n```\n",
+    )
+
+    self.assertEqual([], DOCS_AUDIT.audit_v13(self.root).issues)
+
+  def test_tripwire_scans_body_but_not_frontmatter(self) -> None:
+    """frontmatter 是受治理的元数据，不在「状态只准记录于登记表」射程内。"""
+    self.write_status()
+    self.write(
+        "docs/plan/notes.md",
+        '---\nstatus: current\nnot_for: "由实现者自证 PASS"\n---\n'
+        "# 备注\n\n正文里的 PASS 才绊。\n",
+    )
+
+    result = DOCS_AUDIT.audit_v13(self.root)
+
+    self.assertEqual(1, len(result.issues))
+    self.assertEqual(7, result.issues[0].line)
+
+
 if __name__ == "__main__":
   unittest.main()

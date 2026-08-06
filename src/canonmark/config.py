@@ -186,6 +186,35 @@ class GovernanceConfig:
   required_key_documents: tuple[str, ...] = ()
   required_key_document_globs: tuple[str, ...] = ()
 
+  # ---- V12 / V13 任务框架治理 -------------------------------------------
+  # 任务框架根的判定文件：包含此文件的目录即一个任务框架根（V12/V13 的
+  # 激活条件）。找不到任何框架根时两门都不适用，直接 PASS。
+  status_file_name: str = "01_EXECUTION_CONTROL.md"
+  # V12 预算阈值：软阈值超限只提示；硬阈值超限判失败，除非状态文件里有
+  # 对应检查键（lines / files / evidence-files / evidence-runs）的
+  # `批准:` 行——预算的目的不是禁止大框架，而是让「变大」成为一次显式决定。
+  framework_lines_soft_limit: int = 500
+  framework_lines_hard_limit: int = 800
+  framework_files_soft_limit: int = 6
+  framework_files_hard_limit: int = 10
+  evidence_files_soft_limit: int = 30
+  evidence_files_hard_limit: int = 50
+  evidence_runs_soft_limit: int = 3
+  evidence_runs_hard_limit: int = 5
+  # V13 状态登记表的合法 status 枚举（登记表外出现这些大写 token 即绊线）。
+  status_registry_statuses: frozenset[str] = frozenset(
+      {
+          "PASS",
+          "FAIL",
+          "BLOCKED",
+          "READY",
+          "EVIDENCE_READY",
+          "ACTIVE",
+          "INSUFFICIENT_EVIDENCE",
+          "NOT_APPLICABLE",
+      }
+  )
+
   # ---- 前瞻字段（供后续 hook 使用，当前审计逻辑不消费） -----------------
   # 触发治理的路径前缀：改动落在这些前缀下才需要跑门禁。
   trigger_paths: tuple[str, ...] = ("docs/",)
@@ -227,6 +256,22 @@ class GovernanceConfig:
         rf"({root}/[^\s`'\"<>|:()\[\]{{}}]+)"
         r":([0-9]+)(?:-([0-9]+))?"
     )
+    # V13 绊线正则，随 status_registry_statuses 变化而重建：枚举的独立大写
+    # token（前后不是字母数字、下划线或连字符，`PASS_GATE_G0`、`G1B-PASS`
+    # 这类拼接标识符不算）。
+    if self.status_registry_statuses:
+      alternation = "|".join(
+          re.escape(status)
+          for status in sorted(
+              self.status_registry_statuses, key=len, reverse=True
+          )
+      )
+      self._status_registry_token_re = re.compile(
+          rf"(?<![A-Za-z0-9_-])(?:{alternation})(?![A-Za-z0-9_-])"
+      )
+    else:
+      # 空枚举 = 关闭绊线；不能编译出「到处都匹配空串」的正则。
+      self._status_registry_token_re = re.compile(r"(?!)")
 
   # ---- 只读访问器（审计逻辑通过这些拿已编译正则） -----------------------
   @property
@@ -271,6 +316,10 @@ class GovernanceConfig:
   @property
   def docs_line_reference_re(self) -> re.Pattern[str]:
     return self._docs_line_reference_re
+
+  @property
+  def status_registry_token_re(self) -> re.Pattern[str]:
+    return self._status_registry_token_re
 
   def authority_allowed_for_status(self, status: str, authority: str) -> bool:
     """status 与 current_authority 是否相容（读 status_authority_matrix）。"""

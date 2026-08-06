@@ -12,6 +12,10 @@
   V9  总导航必须链接全部正式顶层目录
   V10 活文档相对链接与 docs/...:line 引用不得断
   V11 防腐烂：导航与标签互检判失败；久未复核与孤儿文档只提示
+  V12 任务框架预算：框架文档与 evidence 体量超软阈值提示、超硬阈值判失败，
+      状态文件的 `批准:` 行可显式放行
+  V13 状态登记表：状态文件必须恰好有一张 id|status|updated_at 登记表，
+      状态词出现在登记表之外即绊线报错
 
 判失败与只提示的分界见 :meth:`GateResult.notice` 与 ``config.adoption_mode``。
 """
@@ -40,7 +44,7 @@ else:
   YAML_IMPORT_ERROR = None
 
 
-SUPPORTED_GATES = ("V2", "V4", "V5", "V9", "V10", "V11")
+SUPPORTED_GATES = ("V2", "V4", "V5", "V9", "V10", "V11", "V12", "V13")
 # Markdown 结构性正则（与项目无关，保持模块常量）。
 REFERENCE_DEFINITION_RE = re.compile(
     r"^\s{0,3}\[[^\]]+\]:\s*(<[^>]+>|[^\s]+)"
@@ -1759,6 +1763,327 @@ def audit_v11(
   return result
 
 
+def framework_roots(
+    docs_dir: Path, config: GovernanceConfig | None = None
+) -> list[Path]:
+  """递归寻找任务框架根：包含状态文件（config.status_file_name）的目录。
+
+  evidence 目录整体剪枝：归档的运行产物里即使复制了一份状态文件，
+  也不构成一个新的框架根。找不到任何框架根时 V12/V13 不适用。
+  """
+  config = _cfg(config)
+  roots: list[Path] = []
+  for current, directory_names, file_names in os.walk(docs_dir):
+    directory_names[:] = sorted(
+        name
+        for name in directory_names
+        if not is_ignored_tool_directory(name, config)
+        and name.casefold() != config.evidence_directory_name
+    )
+    if config.status_file_name in file_names:
+      roots.append(Path(current))
+  return roots
+
+
+def framework_markdown_files(
+    framework_root: Path, config: GovernanceConfig | None = None
+) -> list[Path]:
+  """框架根及其下全部 Markdown，排除 evidence 目录与工具缓存目录。"""
+  config = _cfg(config)
+  found: list[Path] = []
+  for current, directory_names, file_names in os.walk(framework_root):
+    directory_names[:] = sorted(
+        name
+        for name in directory_names
+        if not is_ignored_tool_directory(name, config)
+        and name.casefold() != config.evidence_directory_name
+    )
+    for name in sorted(file_names):
+      if name.lower().endswith(".md"):
+        found.append(Path(current) / name)
+  return found
+
+
+def framework_evidence_directory(
+    framework_root: Path, config: GovernanceConfig | None = None
+) -> Path | None:
+  """返回框架根的 evidence 直接子目录；不存在返回 None。"""
+  config = _cfg(config)
+  for child in sorted(framework_root.iterdir()):
+    if child.is_dir() and child.name.casefold() == config.evidence_directory_name:
+      return child
+  return None
+
+
+def budget_approval_line(status_text: str, check_key: str) -> str | None:
+  """在状态文件中寻找对应检查键的 `批准:` 放行行。
+
+  检查键按独立 token 匹配（前后不是字母数字、下划线或连字符），
+  避免 `批准: evidence-files ...` 顺带放行 `files`。
+  """
+  key_re = re.compile(
+      rf"(?<![A-Za-z0-9_-]){re.escape(check_key)}(?![A-Za-z0-9_-])"
+  )
+  for line in status_text.splitlines():
+    stripped = line.strip()
+    if stripped.startswith("批准:") and key_re.search(stripped):
+      return stripped
+  return None
+
+
+def audit_v12(root: Path, config: GovernanceConfig | None = None) -> GateResult:
+  """V12 任务框架预算：框架文档与 evidence 体量必须留在预算内。
+
+  软阈值超限只提示；硬阈值超限判失败，除非状态文件中有以 `批准:` 开头
+  且含对应检查键（lines / files / evidence-files / evidence-runs）的行——
+  预算的目的不是禁止大框架，而是让「变大」成为一次显式决定，
+  留下一行可追溯的批准记录。
+  """
+  config = _cfg(config)
+  docs_dir = root / config.docs_root
+  result = GateResult("V12", f"{config.docs_root}:1", "0 个任务框架根")
+  if not docs_dir.is_dir():
+    return result
+  roots = framework_roots(docs_dir, config)
+
+  for framework_root in roots:
+    status_file = framework_root / config.status_file_name
+    status_text = status_file.read_text(encoding="utf-8", errors="replace")
+
+    def check_budget(
+        anchor: Path,
+        check_key: str,
+        label: str,
+        measured: int,
+        soft: int,
+        hard: int,
+        unit: str,
+        status_text: str = status_text,
+    ) -> None:
+      """软阈值超限只提示；硬阈值超限按有无批准行分流。"""
+      if measured > hard:
+        approved = budget_approval_line(status_text, check_key)
+        if approved is not None:
+          result.notice(
+              anchor,
+              1,
+              f"{label}超硬阈值（实测 {measured} {unit} > {hard}），"
+              f"已由状态文件批准放行：{approved}",
+              root,
+          )
+        else:
+          result.add(
+              anchor,
+              1,
+              f"{label}超硬阈值（检查键 {check_key}）："
+              f"实测 {measured} {unit} > {hard}（软阈值 {soft}）；"
+              f"确属必要时在状态文件写一行"
+              f" `批准: {check_key} <原因> <日期>` 可放行",
+              root,
+          )
+      elif measured > soft:
+        result.notice(
+            anchor,
+            1,
+            f"{label}超软阈值（检查键 {check_key}）："
+            f"实测 {measured} {unit} > {soft}（硬阈值 {hard}）",
+            root,
+        )
+
+    markdown = framework_markdown_files(framework_root, config)
+    total_lines = 0
+    for path in markdown:
+      with path.open("r", encoding="utf-8", errors="replace") as handle:
+        total_lines += sum(1 for _ in handle)
+    check_budget(
+        status_file,
+        "lines",
+        "框架 Markdown 总行数",
+        total_lines,
+        config.framework_lines_soft_limit,
+        config.framework_lines_hard_limit,
+        "行",
+    )
+    check_budget(
+        status_file,
+        "files",
+        "框架 Markdown 文件数",
+        len(markdown),
+        config.framework_files_soft_limit,
+        config.framework_files_hard_limit,
+        "个",
+    )
+
+    evidence_dir = framework_evidence_directory(framework_root, config)
+    if evidence_dir is None:
+      continue
+    evidence_files = sum(
+        1 for path in evidence_dir.rglob("*") if path.is_file()
+    )
+    check_budget(
+        evidence_dir,
+        "evidence-files",
+        f"{config.evidence_directory_name} 文件总数",
+        evidence_files,
+        config.evidence_files_soft_limit,
+        config.evidence_files_hard_limit,
+        "个",
+    )
+    for task_dir in sorted(
+        child for child in evidence_dir.iterdir() if child.is_dir()
+    ):
+      run_count = sum(1 for child in task_dir.iterdir() if child.is_dir())
+      check_budget(
+          task_dir,
+          "evidence-runs",
+          f"{config.evidence_directory_name}/{task_dir.name} 的运行子目录数",
+          run_count,
+          config.evidence_runs_soft_limit,
+          config.evidence_runs_hard_limit,
+          "个",
+      )
+
+  result.checked = f"{len(roots)} 个任务框架根"
+  return result
+
+
+REGISTRY_HEADER_CELLS = ["id", "status", "updated_at"]
+REGISTRY_SEPARATOR_CELL_RE = re.compile(r":?-+:?")
+
+
+def registry_table_cells(line: str) -> list[str]:
+  """把 Markdown 表行拆成去空白单元格；容忍两端竖线的有无。"""
+  stripped = line.strip()
+  if stripped.startswith("|"):
+    stripped = stripped[1:]
+  if stripped.endswith("|"):
+    stripped = stripped[:-1]
+  return [cell.strip() for cell in stripped.split("|")]
+
+
+def strip_code_span(cell: str) -> str:
+  """剥掉单元格外层的一对反引号：`PASS` 与 PASS 同义。"""
+  if len(cell) >= 2 and cell.startswith("`") and cell.endswith("`"):
+    return cell[1:-1].strip()
+  return cell
+
+
+def audit_v13(root: Path, config: GovernanceConfig | None = None) -> GateResult:
+  """V13 状态登记表：状态只准记录在状态文件的登记表里。
+
+  三层检查（对每个任务框架根）：
+    1. 状态文件必须恰好包含一张表头为 id | status | updated_at 的登记表；
+    2. 表行 id 不得重复、status 必须属于 config.status_registry_statuses 枚举；
+    3. 绊线：框架根下其他 Markdown（排除状态文件与 evidence 目录）正文中
+       出现枚举的独立大写 token 即报错。这是绊线不是语义保证——只能证明
+       状态词出现在了登记表之外，不能证明它是一条状态记录；fenced code
+       block 视为示例不扫，行内代码照扫。
+  """
+  config = _cfg(config)
+  docs_dir = root / config.docs_root
+  result = GateResult("V13", f"{config.docs_root}:1", "0 个任务框架根")
+  if not docs_dir.is_dir():
+    return result
+  roots = framework_roots(docs_dir, config)
+  allowed = sorted(config.status_registry_statuses)
+
+  for framework_root in roots:
+    status_file = framework_root / config.status_file_name
+    status_text = status_file.read_text(encoding="utf-8", errors="replace")
+    visible_lines = list(iter_non_fenced_lines(status_text))
+    header_lines = [
+        line_number
+        for line_number, line in visible_lines
+        if "|" in line
+        and [cell.casefold() for cell in registry_table_cells(line)]
+        == REGISTRY_HEADER_CELLS
+    ]
+
+    if not header_lines:
+      result.add(
+          status_file,
+          1,
+          "状态文件缺少状态登记表：需要恰好一张表头为"
+          " id | status | updated_at 的 Markdown 表",
+          root,
+      )
+    elif len(header_lines) > 1:
+      result.add(
+          status_file,
+          header_lines[1],
+          f"状态登记表必须恰好一个，实际发现 {len(header_lines)} 个"
+          f"（表头行 {', '.join(str(item) for item in header_lines)}）",
+          root,
+      )
+    else:
+      seen_ids: dict[str, int] = {}
+      for line_number, line in visible_lines:
+        if line_number <= header_lines[0]:
+          continue
+        if "|" not in line:
+          break
+        cells = registry_table_cells(line)
+        if cells and all(
+            REGISTRY_SEPARATOR_CELL_RE.fullmatch(cell) for cell in cells
+        ):
+          continue
+        row_id = strip_code_span(cells[0]) if cells else ""
+        row_status = strip_code_span(cells[1]) if len(cells) > 1 else ""
+        if row_id in seen_ids:
+          result.add(
+              status_file,
+              line_number,
+              f"状态登记表 id 重复：{row_id or '空'}"
+              f"（首次出现于第 {seen_ids[row_id]} 行）",
+              root,
+          )
+        else:
+          seen_ids[row_id] = line_number
+        if row_status not in config.status_registry_statuses:
+          result.add(
+              status_file,
+              line_number,
+              f"状态登记表 status 取值非法：{row_status or '空'}；"
+              f"可选值：{', '.join(allowed)}",
+              root,
+          )
+
+    # 绊线：登记表之外的状态词。只扫正文——frontmatter 是受治理的元数据，
+    # 不在「状态只准记录于登记表」的射程内。
+    for path in framework_markdown_files(framework_root, config):
+      if path == status_file:
+        continue
+      text = path.read_text(encoding="utf-8", errors="replace")
+      lines = text.splitlines()
+      body_start_line = 0
+      if lines and starts_frontmatter(lines[0]):
+        closing_index = next(
+            (
+                index
+                for index in range(1, len(lines))
+                if lines[index].strip() == "---"
+            ),
+            None,
+        )
+        if closing_index is not None:
+          body_start_line = closing_index + 1
+      for line_number, line in iter_non_fenced_lines(text):
+        if line_number <= body_start_line:
+          continue
+        tokens = config.status_registry_token_re.findall(line)
+        if tokens:
+          result.add(
+              path,
+              line_number,
+              "状态只准记录于状态文件的登记表，此处出现状态词："
+              f"{', '.join(dict.fromkeys(tokens))}（绊线检查，不做语义判断）",
+              root,
+          )
+
+  result.checked = f"{len(roots)} 个任务框架根"
+  return result
+
+
 AUDITORS = {
     "V2": audit_v2,
     "V4": audit_v4,
@@ -1766,6 +2091,8 @@ AUDITORS = {
     "V9": audit_v9,
     "V10": audit_v10,
     "V11": audit_v11,
+    "V12": audit_v12,
+    "V13": audit_v13,
 }
 
 
