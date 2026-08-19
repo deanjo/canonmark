@@ -6,7 +6,7 @@ current_authority: acceptance-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-19
 ---
 
 # canonmark 验收矩阵
@@ -40,6 +40,9 @@ last_reviewed: 2026-07-29
 | A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例。2026-07-29 用户裁决:据复验 ACCEPT 置 PASS | PASS |
 | A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 见下「A19 对照实验记录」 | 答案取自现行文档,非作废文档 | **四组实测,结论与预期不同**:标签的价值成立(无标签组只能推理并明确要求人确认),但 `canon_read` 的**增量**价值在本实验规模下未体现——有标签组不用工具也答对了。详见下节,含实验设计缺陷的自陈 | INSUFFICIENT_EVIDENCE |
 | A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 独立复验两轮(2026-07-29):首轮 FAIL 四条依据(Homepage 修正未提交、公开命令缺 flag、远程门面 main 陈旧且默认分支为 WIP 分支、README 措辞歧义)→ 逐条翻正后重判 **PASS**——LICENSE 完整 MIT;pyproject 与真实仓库一致;README 表述与事实逐点吻合;远程四点同锚(HEAD=origin/main=origin/feat=本地 main),默认分支 main,可见性 PRIVATE;公开=一条命令(见 tasks/README 的 T9 行,含 gh 2.96 所需 flag);main 分支 CI 首跑 success。公开动作本身留用户(红线) | PASS |
+| A23 | P7 后 | V12 任务框架预算门(软阈值提示 / 硬阈值失败 / 批准行放行) | `pytest tests/ -k FrameworkBudget -q` | 三档判定与 protocol §9.2 契约一致;无框架根时直接 PASS | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
+| A24 | P7 后 | V13 状态登记表门(唯一登记表 + 登记表外状态词绊线) | `pytest tests/ -k StatusRegistry -q` | 登记表缺失/多张/重复 id/非法 status 判失败;绊线只报告不做语义判断,与 protocol §9.3 契约一致 | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
+| A25 | P7 后 | `canon hook` 行为契约(PreToolUse 拦截) | `pytest tests/test_hook.py -q` + `echo '<PreToolUse JSON>' \| canon hook` | 退休文档的 Read 输出 deny JSON 且含替代去处;current / 未贴标签 / 非 docs 路径 / 非 Read 工具 / 解析失败一律静默放行 exit 0 | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
 
 **A17/A18 状态说明(2026-07-28 记,2026-07-29 更新)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。2026-07-29 用户裁决:据复验 ACCEPT 将 A17/A18 由 INSUFFICIENT_EVIDENCE 置 PASS。A19 维持 INSUFFICIENT_EVIDENCE——那是实验自身的局限(增量价值未证),不随本裁决改变。
 
@@ -91,6 +94,7 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 - **本地 pre-commit 钩子已收口(2026-07-29)**:本仓与全新 clone 均已 `pre-commit install`,双向实测——docs/design/ 下无 frontmatter 文档的提交被钩子拦下(exit 1),干净提交放行;全新 clone 从零走通(clone → venv → `pip install -e .` + `pip install pre-commit` → install → 提交)。PATH 前提仍在:提交环境需把 venv 的 bin 加进 PATH(如 `PATH="$PWD/.venv/bin:$PATH"`),否则钩子报 `Executable canon not found`。
 - **Python 版本**:`pyproject.toml` 声明 `>=3.9`,但 CI 只跑 3.11、本地是 3.14,3.9/3.10 从未实测。
 - **写作端 skill 与本协议的权威映射冲突(两处)已于 2026-07-29 由用户裁决**:采纳协议立场,skill §1.5 映射已改为引用 `design/protocol.md` §4.1。能力边界不因裁决消失:canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。
+- **宿主侧读取拦截已交付(2026-08-19)**:此前 README 与 protocol §7.7 的诚实边界写的是「硬拦截需要宿主侧钩子,超出本工具范围」——该表述已过时:`canon hook`(Claude Code PreToolUse 协议)已随仓提供,行为契约与复验命令见 A25。已知边界不因交付消失:**hook 只拦截内置 Read 工具,Bash `cat` 等读取路径仍是既有绕过**,本次有意不封,如实记档。
 - Windows 首跑(CRLF/BOM/反斜杠路径)第一版不覆盖,列入风险。
 - agong_server 侧的实际接入(换用 canonmark + 写 agong 配置)不在本项目范围,是 agong 侧后续。
 - **已修(2026-07-29,决策项⑨,用户拍板)**:审计范围盲区——V5 曾只强制关键文档(key 目录 / 文件名正则 / 权威信号 / 自带 `current_authority`),其余位置的已贴标签文档零校验,`status: bogus-value` 在任何模式下静默全 PASS。现对**任何 frontmatter 可解析的文档**加底线校验:status 枚举须落在配置词汇表内(复验实测读配置、非硬编码);§5.2 前两条矛盾规则(`superseded` 须带指针、`current` 不得带指针——「非空」按语义判,**标量字符串指针同样算**,这个 fail-open 形状是复验刁钻探针抓出后补罚的);坏 YAML 本就判失败,已补锁定测试。边界如实记录:缺 `status` 字段不罚;三字段简化形态(progress.md 形)仍合法;普通文档指针**不查**目标存在性/双向对称/成环(§5.2 第 4 条仍是关键文档专属);「未纳入治理」提示仍仅发给关键文档(既有行为)。V5 计数语同步如实(「N 篇关键文档,M 篇已贴标签普通文档」)。回退变异:短路底线循环 10 红、回退形状判定 2 红(且该 2 红对形状变异是唯一且精确的守卫,复验实证);独立复验 ACCEPT(修前修后 A/B 对照、刁钻探针含配置词汇表翻转)。边缘口径(复验记档):current 方向按真值判空,`superseded_by: 0`/`false` 等假值标量按空放行(非字符串亦非指针);superseded 方向仍列表判定,标量指针照旧 fail-closed——两方向不对称但无放行缝隙。

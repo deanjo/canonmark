@@ -1,12 +1,12 @@
 ---
 status: current
-applies_when: 定义/校验文档权威元数据 8 字段、执行五步权威判定协议、判断 status×current_authority 组合是否合法、处理缺字段或矛盾元数据的 fail-closed 行为
+applies_when: 定义/校验文档权威元数据 8 字段、执行五步权威判定协议、判断 status×current_authority 组合是否合法、处理缺字段或矛盾元数据的 fail-closed 行为、查阅任务框架治理(V12/V13)的检查契约
 not_for: 价值主张与竞品边界(见 vision.md)、阶段规划顺序(见 roadmap.md)、验收判定标准(见 acceptance.md)
 current_authority: contract-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-19
 ---
 
 # canonmark 权威元数据契约与判定协议
@@ -300,7 +300,7 @@ README 文件清单标注为现行、而该文档自身声明已作废时,判为
 1. **为什么必须有 MCP 这一层**:写在文档里的约定,agent 得先读到那篇文档才知道(先有鸡先有蛋);注册进工具面的能力,它睁眼就看见。这就是 T14 说的「让能力出现在消费者工具面,而非仅存在于文档约定」。
 2. **为什么手写 MCP server 而不用官方 SDK**:canonmark 承诺 `pip install` 后纯标准库即可跑。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0,自己实现的体量很小,不值得为省它把一棵额外依赖树压给每个使用者。实现范围限于 `initialize` / `tools/list` / `tools/call` 三个方法,够跑通工具调用;完整握手有测试覆盖。
 
-**诚实边界**:话术仍是话术。工具进了列表、描述里写死了「替代直接读文件」,但 agent 理论上仍可能顺手用内置读取工具绕过去。要拦死需要宿主侧的钩子(例如拦截对 `docs/**` 的直接读取并转交 `canon_read`),那超出本工具的范围。当前设计是三重提示(工具在列表里 + 描述说死 + 宿主指令一句),不是强制。
+**诚实边界(2026-08-19 更新:宿主侧钩子已交付)**:话术仍是话术——工具进了列表、描述里写死了「替代直接读文件」,agent 理论上仍可能顺手用内置读取工具绕过去。此前的结论是「拦死需要宿主侧钩子,超出本工具范围」;该钩子现已随仓提供:`canon hook` 实现 Claude Code 的 PreToolUse 拦截协议,内置 Read 命中 docs 根下退休文档(`superseded` / `archive`)时**直接拒绝并给出替代去处**(状态判定与文案和 `canon read` 同一逻辑源);`canon init --print-hook` 打印接线用的 settings.json 片段。这把「先读标签」从三重提示升级为宿主侧强制。已知边界如实保留:**hook 只拦截 Read 工具,Bash `cat` 等其他读取路径不在拦截范围**;current / 未贴标签 / 非 docs 路径 / 解析失败一律静默放行(哲学同 V11 的分级:闸机故障不得锁死全库)。
 
 ## 8. 与协议交互的清单(自查)
 
@@ -312,3 +312,43 @@ README 文件清单标注为现行、而该文档自身声明已作废时,判为
 - [ ] `superseded_by` 是否与 `status` 一致(`current` 必须为 `[]`)
 - [ ] `supersedes` / `superseded_by` 反向指针是否对称、替代链是否无环
 - [ ] 首段是否结论先行,非平凡论断是否带锚点(`file:line` / 数字 / 命令输出)
+
+## 9. 任务框架治理契约(V12/V13)
+
+§1–§8 治理的是单篇文档的权威与生命周期;本节治理的是另一个层面——**AI 长任务的任务框架文档集**(执行总台、任务卡、evidence 目录)作为整体的失控。为什么需要、真实案例见 [vision.md](./vision.md);本节只写机器契约。
+
+### 9.1 任务框架根的判定(两门共同的激活条件)
+
+docs 根下(含任意深度子目录)**包含状态文件的目录即一个任务框架根**。状态文件名由配置 `status_file_name` 指定(默认 `01_EXECUTION_CONTROL.md`,见 `src/canonmark/config.py`)。两条边界:
+
+- evidence 目录整体剪枝:归档的运行产物里即使复制了一份状态文件,也不构成新的框架根;
+- 找不到任何框架根时,V12/V13 均不适用,直接 PASS——没有任务框架的项目不为这两门付任何代价。
+
+### 9.2 V12 任务框架预算
+
+对每个框架根,按四个**检查键**测量并对照软 / 硬两级阈值(默认值见 `src/canonmark/config.py` 的 `framework_*` / `evidence_*` 字段,不在本文复制):
+
+| 检查键 | 测量对象 |
+|---|---|
+| `lines` | 框架根下全部 Markdown 的总行数(排除 evidence 目录) |
+| `files` | 框架根下 Markdown 文件数(排除 evidence 目录) |
+| `evidence-files` | evidence 目录内文件总数 |
+| `evidence-runs` | evidence 下每个任务子目录的运行子目录数 |
+
+判定分三档:
+
+- 超**软阈值**:只提示,不判失败;
+- 超**硬阈值**:判失败——除非状态文件里存在对应检查键的批准行;
+- **批准行显式放行**:状态文件中一行 `批准: <检查键> <原因> <日期>`,该检查键的硬阈值超限降级为提示并回显批准行。检查键按独立 token 匹配,`批准: evidence-files …` 不会顺带放行 `files`。
+
+预算的目的不是禁止大框架,而是让「变大」成为一次留痕的显式决定——谁批的、为什么、哪天,一行可追溯。
+
+### 9.3 V13 状态登记表
+
+状态只准记录在状态文件的**唯一登记表**里。三层检查:
+
+1. 状态文件必须**恰好包含一张**表头为 `id`、`status`、`updated_at` 的 Markdown 表(零张、多张均判失败);
+2. 表行 `id` 不得重复;`status` 必须落在配置枚举 `status_registry_statuses` 内(默认:`PASS` / `FAIL` / `BLOCKED` / `READY` / `EVIDENCE_READY` / `ACTIVE` / `INSUFFICIENT_EVIDENCE` / `NOT_APPLICABLE`);
+3. **绊线**:框架根下其他 Markdown(排除状态文件与 evidence 目录)正文中出现枚举内的独立大写 token 即报告。这是绊线不是语义保证——只能证明状态词出现在了登记表之外,不判断它是不是一条状态记录;fenced code block 视为示例不扫,frontmatter 是受治理的元数据、不在射程内。
+
+与其余各门一致,两门是**纯快照检查**:只读工作区文件,零 git、零 subprocess。

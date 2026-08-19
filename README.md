@@ -52,6 +52,10 @@ The old body is never loaded as current fact.
   stale body.
 - Enforces it as a **gate**: `canon audit docs/` in pre-commit and CI, so the
   labels can't rot unnoticed.
+- Governs **task-framework docs** too (the V12/V13 gates): budgets on framework
+  and evidence sprawl, plus a single status registry — a status word copied
+  outside it trips a wire. Built for the battle docs that long-running AI tasks
+  leave behind.
 
 ## Why
 
@@ -74,6 +78,14 @@ lifecycle layer** of the AI-context tooling stack.
 One line: **AGENTS.md tells the agent how to work; canonmark tells the agent which
 doc to trust.**
 
+One more division of labor: canonmark is the **checking side**. Its writing-side
+counterpart is the `technical-plan-sharding` skill, which guides how to write the
+sharded plan doc set (roadmap entry, contracts, task shards, acceptance matrix)
+that these gates then verify. That skill is not shipped with this repo yet; the
+metadata vocabulary and legality matrix have a single source of truth —
+[protocol §4](docs/design/protocol.md) — which the writing side references rather
+than copies.
+
 ## Quick start
 
 > **Early development.** The CLI works and is fully tested, but is not published
@@ -86,6 +98,7 @@ canon audit docs/              # audit authority metadata; non-zero exit on conf
 canon read docs/design/x.md    # read a doc through the contract (see below)
 canon index --current-only     # compact label listing; on demand, never a prerequisite
 canon mcp                      # run as an MCP server so agents get canon_read as a tool
+canon hook                     # Claude Code PreToolUse hook: deny built-in reads of retired docs
 ```
 
 `canon audit` parses only the frontmatter of each key doc, checks it against the
@@ -141,10 +154,17 @@ Run `canon init` and it prints an `.mcp.json` snippet plus one line for your
 on every start — the capability lives in the tool surface, not in a convention the
 agent has to read a document to discover.
 
-The honest limit: this is filtering, not enforcement. The tool is in the list and
-its description says "use this instead of reading files directly," but an agent can
-still reach for its built-in file reader. Hard enforcement would need a host-side
-hook that intercepts reads under `docs/`, which is outside this tool's scope.
+That used to be the honest limit: filtering, not enforcement — the tool is in the
+list and its description says "use this instead of reading files directly," but an
+agent could still reach for its built-in file reader. The host-side hook now ships
+with the repo: `canon hook` implements Claude Code's PreToolUse protocol, denying
+a built-in `Read` of a retired doc under `docs/` and answering with the same
+replacement pointer `canon read` gives; `canon init --print-hook` prints the
+`settings.json` snippet to wire it up. On hosts that support hooks, the reading
+path is upgraded from filtering to enforcement. The boundary that remains, kept
+honest: the hook only intercepts the `Read` tool — reading a file through `Bash`
+(`cat`, `head`, …) is a known bypass, deliberately left open — and a parse failure
+always passes silently, because a broken turnstile must never lock the library.
 
 What it does buy you, mechanically: a retired doc's body never enters the context
 window, so it cannot be the thing the agent pattern-matches against later.
@@ -167,8 +187,9 @@ reference project canonmark was extracted from runs a large Chinese doc library.
 
 ## Status
 
-**Early development — P0–P6 complete; P0–P5 independently verified, and P6
-accepted on re-review after an initial REJECT (see below).** The auditor has been
+**Early development — P0–P7 complete (public since 2026-07-29); P0–P5
+independently verified, and P6 accepted on re-review after an initial REJECT
+(see below).** The auditor has been
 extracted from its origin project and fully parameterized. At extraction time (P1)
 its default output was verified byte-identical to the original's — a dated fact,
 not a standing promise: since P5 the default output intentionally diverges from

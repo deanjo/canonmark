@@ -1,7 +1,7 @@
 ---
 status: current
 owner: canonmark
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-19
 ---
 
 # canonmark 进度心跳
@@ -10,6 +10,7 @@ last_reviewed: 2026-07-28
 
 | 时间 | 阶段 | 状态 | 下一步 |
 |---|---|---|---|
+| 2026-08-19 | 收口交付（grill 任务书）：hook + 还债 + skill 加固 | 七项决策拍板：定位=technical-plan-sharding 配套、自用闭环优先；对外形态定 plugin 方向、暂不动手；sharding 拆两半、整本不进插件。交付：`canon hook`（PreToolUse 拦截退休文档，fail-open，只拦 Read 的边界已写档）+ `canon init --print-hook` + 本仓 dogfood 接线；V12/V13 补进 roadmap/protocol/acceptance，README/vision 补检查端-写作端分工与任务框架治理定位；notice 全量改行动指引（逐门判定与退出码零漂移，留底比对）；skill 侧绝对路径改 GitHub URL、codex 拷贝收 symlink。pytest 全绿、strict 自审全门 PASS；端到端 A3 因嵌套会话鉴权不可用判 BLOCKED（命令层 deny/allow 已实测） | 独立复验（A12）→ 推送 origin/main（用户已授权） |
 | 2026-07-29 | **公开发布（P7 收官）** | 用户明示「公开」拍板，agent 代执行 `gh repo edit --visibility public --accept-visibility-change-consequences`，实测确认 PUBLIC：https://github.com/deanjo/canonmark 。「发布永不自动执行」铁律全程被遵守——从建仓（私有）到公开，每一步都是用户先明示、agent 后执行。P0–P7 全部落地；README/tasks/acceptance/roadmap/handoff 已同步「已公开」口径 | 无待办。后续可选方向（未立项，需用户开题）：PyPI 发布、agong_server 侧接入、V11 O(n²) 优化、Python 3.9/3.10 与 Windows 实测 |
 | 2026-07-29 | ⑨ 全域底线校验 + T9 发布准备（用户「按照你的建议来」二次放行） | ⑨ 同日发现同日落地：任何 frontmatter 可解析的文档无论位置过底线校验——status 枚举读配置词汇表（非硬编码，复验翻转实证）；superseded 须带指针、current 不得带指针（非空按语义判——复验刁钻探针抓出**标量指针 fail-open 形状**，已补罚且新守卫对该变异唯一精确）；三字段简化形态仍合法、缺 status 不罚、零 frontmatter 行为不变；回退变异 10+2 红；独立复验 ACCEPT（修前修后 A/B 对照）。T9 发布准备：发布物三件套独立核对，Homepage 改指真实仓库；**A12 首轮判 FAIL**（四条依据：Homepage 未提交、公开命令缺 flag、远程门面 main 陈旧且默认分支为 WIP 分支、README 措辞歧义）→ 逐条翻正（main 快进四点同锚、默认分支切 main、命令含 flag 记入 T9 行、README 消歧）后**重判 PASS**；main 分支 CI 首跑 success。protocol §5.1 新增全域底线段。公开发布唯余用户扣扳机（命令见 T9 行） | 等用户定 ③ 公开时机；agent 侧无待办 |
 | 2026-07-29 | 决策卡执行（用户逐项拍板落地） | 六项执行完毕：① skill×协议冲突按协议立场收口（skill §1.5 改为引用 §4.1，附裁决注记）；④ A17/A18 置 PASS，五处口径同步；⑤ 水平线边界修复——gradual 看 `---` 后首个非空行像不像 YAML 键值对，strict 不变，缺闭合照旧报错；回退变异 3 条测试红；独立复验代码侧 ACCEPT（10 组边界探针），**文档口径首轮 REJECT**（同批三处仍说「未修」+ 盲区条目把零校验范围写窄了）→ 修复后聚焦复验 ACCEPT；两条已知代价（注释行开头标签失效、`status:current` 手误静默放过）记入 acceptance；⑦ pre-commit 钩子装入本仓 + 全新 clone，双向实测拦坏放好——顺带发现**非 key 目录文档零校验**盲区（`status: bogus-value` 任何模式静默 PASS），记入 acceptance 已知边界，立为新决策项 ⑨；⑧ README 主线压「标签+审计」，canon_read 降为「更进一步：执行层」；② 私有仓 deanjo/canonmark 建立、双分支推送、PR#1 首跑 CI 两 job pass——项目首次有异地备份与真实 CI；③⑥ 按建议搁置 | ⑨ 盲区修法待拍板；③ 发布时机待用户；波次 4（T9）随 ③ 启动 |
