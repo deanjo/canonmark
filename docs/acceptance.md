@@ -40,9 +40,9 @@ last_reviewed: 2026-08-19
 | A18 | P6 | `canon index` 紧凑且可过滤 | `pytest tests/test_read.py -k Index` | 输出字节数 < 全文总量的 10%;过滤生效 | 自身 docs 实测远低于门槛(具体比例跑命令栏的命令现取);另加一条更本质的断言——索引大小**不随正文变长而增长**,只与篇数有关(原判据在文档很短时会失真);`--dir` / `--current-only` / `--json` 均有用例。2026-07-29 用户裁决:据复验 ACCEPT 置 PASS | PASS |
 | A19 | P6 | 对照实验:消费者被拦并改读替代目标 | 见下「A19 对照实验记录」 | 答案取自现行文档,非作废文档 | **四组实测,结论与预期不同**:标签的价值成立(无标签组只能推理并明确要求人确认),但 `canon_read` 的**增量**价值在本实验规模下未体现——有标签组不用工具也答对了。详见下节,含实验设计缺陷的自陈 | INSUFFICIENT_EVIDENCE |
 | A12 | P7 | 发布物完整 | 人工核对 README/pyproject/LICENSE | 齐全,可一条命令推送 | 独立复验两轮(2026-07-29):首轮 FAIL 四条依据(Homepage 修正未提交、公开命令缺 flag、远程门面 main 陈旧且默认分支为 WIP 分支、README 措辞歧义)→ 逐条翻正后重判 **PASS**——LICENSE 完整 MIT;pyproject 与真实仓库一致;README 表述与事实逐点吻合;远程四点同锚(HEAD=origin/main=origin/feat=本地 main),默认分支 main,可见性 PRIVATE;公开=一条命令(见 tasks/README 的 T9 行,含 gh 2.96 所需 flag);main 分支 CI 首跑 success。公开动作本身留用户(红线) | PASS |
-| A23 | P7 后 | V12 任务框架预算门(软阈值提示 / 硬阈值失败 / 批准行放行) | `pytest tests/ -k FrameworkBudget -q` | 三档判定与 protocol §9.2 契约一致;无框架根时直接 PASS | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
-| A24 | P7 后 | V13 状态登记表门(唯一登记表 + 登记表外状态词绊线) | `pytest tests/ -k StatusRegistry -q` | 登记表缺失/多张/重复 id/非法 status 判失败;绊线只报告不做语义判断,与 protocol §9.3 契约一致 | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
-| A25 | P7 后 | `canon hook` 行为契约(PreToolUse 拦截) | `pytest tests/test_hook.py -q` + `echo '<PreToolUse JSON>' \| canon hook` | 退休文档的 Read 输出 deny JSON 且含替代去处;current / 未贴标签 / 非 docs 路径 / 非 Read 工具 / 解析失败一律静默放行 exit 0 | 2026-08-19 独立复验中 | INSUFFICIENT_EVIDENCE |
+| A23 | P7 后 | V12 任务框架预算门(软阈值提示 / 硬阈值失败 / 批准行放行) | `pytest tests/ -k FrameworkBudget -q` | 三档判定与 protocol §9.2 契约一致;无框架根时直接 PASS | 2026-08-19 零上下文独立复验 ACCEPT:软/硬/批准三档与无框架根路径逐条实测吻合(本仓自审 V12 即活证据) | PASS |
+| A24 | P7 后 | V13 状态登记表门(唯一登记表 + 登记表外状态词绊线) | `pytest tests/ -k StatusRegistry -q` | 登记表缺失/多张/重复 id/非法 status 判失败;绊线只报告不做语义判断,与 protocol §9.3 契约一致 | 2026-08-19 零上下文独立复验 ACCEPT:四类失败与绊线行为逐条实测吻合 | PASS |
+| A25 | P7 后 | `canon hook` 行为契约(PreToolUse 拦截) | `pytest tests/test_hook.py -q` + `echo '<PreToolUse JSON>' \| canon hook` | 退休文档的 Read 输出 deny JSON 且含替代去处;current / 未贴标签 / 非 docs 路径 / 非 Read 工具 / 解析失败一律静默放行 exit 0 | 2026-08-19 零上下文独立复验 ACCEPT:契约实测 + 13 组对抗探针(路径穿越/符号链接/兄弟目录前缀/环境变量冲突/坏输入)无静默放过、无误拦 | PASS |
 
 **A17/A18 状态说明(2026-07-28 记,2026-07-29 更新)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。2026-07-29 用户裁决:据复验 ACCEPT 将 A17/A18 由 INSUFFICIENT_EVIDENCE 置 PASS。A19 维持 INSUFFICIENT_EVIDENCE——那是实验自身的局限(增量价值未证),不随本裁决改变。
 
