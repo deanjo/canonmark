@@ -11,7 +11,10 @@
       列出 docs 下文档的权威标签，一篇一行。按需工具，不是读文档的必经路径。
   ``canon mcp [--config FILE]``
       以 MCP server 运行（stdio JSON-RPC），把 canon_read 送进 agent 的工具面。
-  ``canon init [DIR] [--force] [--print-mcp]``
+  ``canon hook [--config FILE]``
+      作为 Claude Code PreToolUse hook 运行（stdin 收事件 JSON）：内置 Read
+      读 docs 下退休文档时输出 deny 与替代去处；其余情况一律静默放行 exit 0。
+  ``canon init [DIR] [--force] [--print-mcp] [--print-hook]``
       在 DIR（默认当前目录）写一份 canonmark.toml 起步配置，并打印 MCP 接线片段。
 """
 
@@ -24,6 +27,7 @@ from typing import Sequence
 
 from .audit import AUDITORS, SUPPORTED_GATES, discover_repo_root, print_result
 from .config import load_config
+from .hook import run_hook
 from .index import IndexUnavailable, build_index, render_index
 from .mcp import serve as serve_mcp
 from .read import read_document, render_read_result
@@ -86,6 +90,36 @@ MCP_HELP = f"""\
 
 # 之后 agent 每次启动都会看到 canon_read 出现在它的工具列表里——
 # 能力出现在工具面，而不是只躺在文档约定里。
+"""
+
+
+HOOK_CONFIG_SNIPPET = """\
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "canon hook --config \\"$CLAUDE_PROJECT_DIR/canonmark.toml\\""
+          }
+        ]
+      }
+    ]
+  }
+}"""
+
+HOOK_HELP = f"""\
+# 把下面这段写进项目的 .claude/settings.json（已有则合并 hooks 字段）
+
+{HOOK_CONFIG_SNIPPET}
+
+# hook 由 Claude Code 直接执行，`canon` 须在它的 PATH 上；装在 venv 里时把
+# command 里的 canon 换成绝对形式："$CLAUDE_PROJECT_DIR/.venv/bin/canon" hook ...
+
+# 之后 agent 用内置 Read 读 docs 下退休文档时会被拒绝并收到替代去处；
+# hook 自身故障一律放行（fail-open），不会锁死正常读取。
 """
 
 
@@ -200,6 +234,21 @@ def build_parser() -> argparse.ArgumentParser:
       help="治理配置文件（YAML 或 TOML）；省略则使用内置默认值",
   )
 
+  hook = subparsers.add_parser(
+      "hook",
+      help="作为 Claude Code PreToolUse hook 运行（stdin 收事件 JSON）",
+      description=(
+          "供 Claude Code 在每次内置 Read 前调用：目标是 docs 下的退休文档时"
+          "输出 deny 与替代去处；其余情况（含 hook 自身故障）一律静默放行，"
+          "exit 0。接线片段由 `canon init --print-hook` 生成。"
+      ),
+  )
+  hook.add_argument(
+      "--config",
+      metavar="FILE",
+      help="治理配置文件（YAML 或 TOML）；缺失或无法读取时用内置默认值",
+  )
+
   init = subparsers.add_parser(
       "init",
       help="生成一份 canonmark.toml 起步配置",
@@ -208,6 +257,11 @@ def build_parser() -> argparse.ArgumentParser:
       "--print-mcp",
       action="store_true",
       help="只打印 MCP 接线片段与宿主指令话术，不写任何文件",
+  )
+  init.add_argument(
+      "--print-hook",
+      action="store_true",
+      help="只打印 PreToolUse hook 接线片段，不写任何文件",
   )
   init.add_argument(
       "directory",
@@ -317,8 +371,11 @@ def run_index(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
 def run_init(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
   """执行 init 子命令：写起步配置，并给出 MCP 接线指引。"""
-  if args.print_mcp:
-    print(MCP_HELP, end="")
+  if args.print_mcp or args.print_hook:
+    if args.print_mcp:
+      print(MCP_HELP, end="")
+    if args.print_hook:
+      print(HOOK_HELP, end="")
     return 0
 
   target_dir = Path(args.directory).expanduser().resolve()
@@ -348,6 +405,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return run_index(args, parser)
   if args.command == "mcp":
     return serve_mcp(args.config)
+  if args.command == "hook":
+    return run_hook(args.config)
   if args.command == "init":
     return run_init(args, parser)
   parser.print_help()

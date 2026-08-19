@@ -939,13 +939,22 @@ def audit_v2(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       # gradual：既有目录名只提示。存量项目的 `API_Reference`、`user_guide`
       # 是既成事实，不是这次治理做错的事；改名要连带改掉所有指向它的链接，
       # 绝不是「装上第一天」能做的。判失败只会让人把整个门禁关掉。
-      report = result.notice if config.is_gradual else result.add
-      report(
-          directory,
-          1,
-          f"目录名不是 {config.directory_name_label}；{exemption_clause}",
-          root,
-      )
+      if config.is_gradual:
+        result.notice(
+            directory,
+            1,
+            f"目录名不是 {config.directory_name_label}（{exemption_clause}）。"
+            f"下一步：改为 {config.directory_name_label} 目录名，"
+            "并同步更新所有指向它的链接",
+            root,
+        )
+      else:
+        result.add(
+            directory,
+            1,
+            f"目录名不是 {config.directory_name_label}；{exemption_clause}",
+            root,
+        )
   result.checked = f"{checked} 个受治理目录"
   return result
 
@@ -969,13 +978,18 @@ def audit_v4(root: Path, config: GovernanceConfig | None = None) -> GateResult:
     if not (directory / "README.md").is_file():
       # gradual：从没建过导航的目录只提示。要求存量项目先重建整个 docs 结构
       # 才肯放行，等于把门槛前置到尚未产生任何价值的时刻。
-      report = result.notice if config.is_gradual else result.add
-      report(
-          directory,
-          1,
-          f"直接含 {len(direct_files)} 个文件且包含 Markdown，缺少 README.md",
-          root,
+      message = (
+          f"直接含 {len(direct_files)} 个文件且包含 Markdown，缺少 README.md"
       )
+      if config.is_gradual:
+        result.notice(
+            directory,
+            1,
+            f"{message}。下一步：在该目录新建 README.md，链接目录内各文档",
+            root,
+        )
+      else:
+        result.add(directory, 1, message, root)
   result.checked = f"{candidates} 个非纯资产候选目录"
   return result
 
@@ -1047,7 +1061,9 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
         result.notice(
             path,
             1,
-            "未纳入治理：无 frontmatter，本次跳过；贴上标签即开始受治理",
+            "未纳入治理：无 frontmatter，本次跳过。"
+            "下一步：在文件顶部贴上 frontmatter 标签"
+            "（status/owner/last_reviewed）即开始受治理",
             root,
         )
         continue
@@ -1169,8 +1185,8 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
           result.notice(
               path,
               frontmatter.fields["supersedes"],
-              f"被取代方尚未纳入治理：{claimed_value}；"
-              "给它贴上标签并写明 superseded_by 后，替代关系才能被完整校验",
+              f"被取代方尚未纳入治理：{claimed_value}。"
+              "下一步：给它贴上标签并写明 superseded_by，替代关系才能被完整校验",
               root,
           )
           continue
@@ -1289,8 +1305,8 @@ def audit_v5(root: Path, config: GovernanceConfig | None = None) -> GateResult:
               result.notice(
                   path,
                   frontmatter.fields["superseded_by"],
-                  f"替代目标尚未纳入治理：{target_value}；"
-                  "给它也贴上标签后，替代关系才能被完整校验",
+                  f"替代目标尚未纳入治理：{target_value}。"
+                  "下一步：给它也贴上标签，替代关系才能被完整校验",
                   root,
               )
             else:
@@ -1397,8 +1413,16 @@ def audit_v9(root: Path, config: GovernanceConfig | None = None) -> GateResult:
   if not readme.is_file():
     # gradual：没有总导航说明项目还没打算用导航层，不强制它先造一个；
     # 一旦存在，下面照常检查它是否漏链目录（有了就得对）。
-    report = result.notice if config.is_gradual else result.add
-    report(readme, 1, "总导航不存在", root)
+    if config.is_gradual:
+      result.notice(
+          readme,
+          1,
+          f"总导航不存在。下一步：在 {config.docs_root}/README.md 建立总导航，"
+          "链接各正式顶层目录",
+          root,
+      )
+    else:
+      result.add(readme, 1, "总导航不存在", root)
     return result
 
   top_level_directories = sorted(
@@ -1435,14 +1459,22 @@ def audit_v9(root: Path, config: GovernanceConfig | None = None) -> GateResult:
       # gradual：漏链只提示。否则与 V4 直接打架——V4 刚说「这个目录的
       # README 可以先不建」，V9 却要求总导航必须链接那个还不存在的文件，
       # 结果是「有一个不完整的索引」（存量项目的典型形态）照样被打红。
-      report = result.notice if config.is_gradual else result.add
-      report(
-          readme,
-          1,
-          f"未导航正式顶层目录 {config.docs_root}/{directory.name}/；"
-          f"应链接 ./{directory.name}/README.md",
-          root,
-      )
+      if config.is_gradual:
+        result.notice(
+            readme,
+            1,
+            f"未导航正式顶层目录 {config.docs_root}/{directory.name}/。"
+            f"下一步：在总导航中加入链接 ./{directory.name}/README.md",
+            root,
+        )
+      else:
+        result.add(
+            readme,
+            1,
+            f"未导航正式顶层目录 {config.docs_root}/{directory.name}/；"
+            f"应链接 ./{directory.name}/README.md",
+            root,
+        )
   result.checked = f"{len(formal)} 个正式顶层目录"
   return result
 
@@ -1504,24 +1536,22 @@ def audit_relative_links(
       link_count += 1
       target = (source.parent / relative).resolve()
     if not target.exists():
-      report(
-          source,
-          line_number,
+      message = (
           f"相对链接目标不存在：{destination} "
-          f"(解析为 {display_path(target, root)})",
-          root,
+          f"(解析为 {display_path(target, root)})"
       )
+      if not governed:
+        message += "。下一步：改为指向存在的文件，或删除失效链接"
+      report(source, line_number, message, root)
       continue
     fragment_issue = markdown_line_fragment_issue(
         target, fragment, line_count_cache
     )
     if fragment_issue:
-      report(
-          source,
-          line_number,
-          f"相对链接 {fragment_issue}：{destination}",
-          root,
-      )
+      message = f"相对链接 {fragment_issue}：{destination}"
+      if not governed:
+        message += "。下一步：核对目标文件行数后修正行号 fragment"
+      report(source, line_number, message, root)
   return link_count
 
 
@@ -1742,7 +1772,7 @@ def audit_v11(
           path,
           1,
           "孤儿文档：所在目录的 README 没有链接到它，"
-          "读者只能靠全文检索撞见；建议把它加入该 README",
+          "读者只能靠全文检索撞见。下一步：把它加入该目录 README 的导航",
           root,
       )
 
@@ -1754,8 +1784,8 @@ def audit_v11(
         result.notice(
             path,
             frontmatter.fields.get("last_reviewed", 1),
-            f"已 {age} 天未复核（阈值 {config.last_reviewed_max_age_days} 天）；"
-            "确认仍然有效后更新 last_reviewed 即可",
+            f"已 {age} 天未复核（阈值 {config.last_reviewed_max_age_days} 天）。"
+            "下一步：复核内容仍然有效后，把 last_reviewed 更新为复核当天日期",
             root,
         )
 
@@ -1868,7 +1898,8 @@ def audit_v12(root: Path, config: GovernanceConfig | None = None) -> GateResult:
               anchor,
               1,
               f"{label}超硬阈值（实测 {measured} {unit} > {hard}），"
-              f"已由状态文件批准放行：{approved}",
+              f"已由状态文件批准放行：{approved}。"
+              "下一步：定期复核该批准行，不再成立时删除以恢复预算约束",
               root,
           )
         else:
@@ -1886,7 +1917,9 @@ def audit_v12(root: Path, config: GovernanceConfig | None = None) -> GateResult:
             anchor,
             1,
             f"{label}超软阈值（检查键 {check_key}）："
-            f"实测 {measured} {unit} > {soft}（硬阈值 {hard}）",
+            f"实测 {measured} {unit} > {soft}（硬阈值 {hard}）。"
+            "下一步：精简或归档超预算内容，确需超限时在状态文件写一行"
+            f" `批准: {check_key} <原因> <日期>` 为硬阈值预先放行",
             root,
         )
 

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/bin/canon\" hook --config \"$CLAUDE_PROJECT_DIR/canonmark.toml\""
+          }
+        ]
+      }
+    ]
+  }
+}
