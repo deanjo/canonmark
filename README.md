@@ -88,11 +88,15 @@ than copies.
 
 ## Quick start
 
-> **Early development.** The CLI works and is fully tested, but is not published
-> to PyPI yet — install from source until then.
+```bash
+pip install canonmark
+```
+
+Requires Python 3.9+. PyYAML is pulled in automatically — it is a real dependency,
+not an optional extra, so a fresh install works out of the box. (If you install
+from a clone instead, `pip install -e .` gets you the same thing.)
 
 ```bash
-pip install canonmark          # not published yet; use `pip install -e .` from a clone
 canon init                     # scaffold canonmark.toml + print the MCP wiring
 canon audit docs/              # audit authority metadata; non-zero exit on conflicts
 canon read docs/design/x.md    # read a doc through the contract (see below)
@@ -100,6 +104,52 @@ canon index --current-only     # compact label listing; on demand, never a prere
 canon mcp                      # run as an MCP server so agents get canon_read as a tool
 canon hook                     # Claude Code PreToolUse hook: deny built-in reads of retired docs
 ```
+
+### Wire it into your gate
+
+Pre-commit — add to `.pre-commit-config.yaml`, then `pre-commit install`:
+
+```yaml
+repos:
+  - repo: https://github.com/deanjo/canonmark
+    rev: v0.1.0
+    hooks:
+      - id: canon-audit
+```
+
+GitHub Actions — add a step to your workflow:
+
+```yaml
+      - uses: deanjo/canonmark@main
+        with:
+          path: docs/
+          config: canonmark.toml
+```
+
+Or just call the CLI directly in any CI system: `canon audit docs/` exits non-zero
+when the labels are wrong.
+
+> **If the hook reports `Executable canon not found`:** pre-commit runs in its own
+> environment, so `canon` has to be on the `PATH` of the process that makes the
+> commit. Installing canonmark into a virtualenv and committing from outside it is
+> the usual cause — activate the venv first, or prefix the command with
+> `PATH="$PWD/.venv/bin:$PATH"`.
+
+### Make agents read the label first (Claude Code)
+
+Two wirings, both printed for you — paste them in and you are done:
+
+```bash
+canon init --print-mcp     # .mcp.json snippet: gives the agent canon_read as a tool
+canon init --print-hook    # .claude/settings.json snippet: PreToolUse interception
+```
+
+The MCP snippet *offers* the right tool; the hook snippet *enforces* it. With the
+hook installed, an agent that reaches for its built-in file reader on a retired doc
+under `docs/` gets a denial plus the pointer to the current document — the retired
+body never enters the context window. The hook fails open: if it cannot parse the
+event, the config, or the file, it stays silent and the read proceeds, so a broken
+hook can never lock you out of your own docs.
 
 `canon audit` parses only the frontmatter of each key doc, checks it against the
 authority contract, and reports every `INSUFFICIENT_METADATA` / `METADATA_CONFLICT`
@@ -206,7 +256,7 @@ because it contained a genuine one-sided declaration the new check now catches.
 
 P6 added the reading path: `canon read` (contract-filtered delivery), `canon index`
 (compact listing), and `canon mcp` (an MCP server, hand-written over stdio JSON-RPC
-so the zero-dependency promise holds). P6 went through independent review twice:
+so no MCP SDK is pulled in; PyYAML became a hard dependency on 2026-08-19 so a fresh `pip install` works out of the box). P6 went through independent review twice:
 the first round returned REJECT (nine findings); after fixes, the re-review
 returned ACCEPT, with its mandatory follow-ups folded into commit `6e21f78`. The
 matching acceptance rows (A17/A18) stayed `INSUFFICIENT_EVIDENCE` until a human

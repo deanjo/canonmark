@@ -12,11 +12,15 @@ license = "MIT"
 authors = [{ name = "canonmark contributors" }]
 keywords = ["documentation", "ai-agents", "governance", "frontmatter", "docs-as-code", "pre-commit"]
 
-# 运行时零硬依赖:V2/V4/V9/V12/V13 纯标准库即可跑;读 frontmatter 的门(V5/V10/V11)需要
-# PyYAML(可选)。**读标签的子命令(read / index / mcp)同样需要 PyYAML**——
+# PyYAML 自 2026-08-19 起为硬依赖:`pip install canonmark` 开箱即用,不必再记得装附加项。
+# 改动理由是实测踩出来的——只装本体时 V5/V10/V11 报缺依赖、退出码 1,
+# 正好打脸 README「不会让你的老仓第一天变红」这条承诺。
+# 依赖划分仍如实记录(它决定万一缺 PyYAML 时哪些能力还在):
+# V2/V4/V9/V12/V13 纯标准库即可跑;读 frontmatter 的门(V5/V10/V11)需要 PyYAML。
+# **读标签的子命令(read / index / mcp)同样需要 PyYAML**——
 # 没装时它们一律明确报错,绝不静默把整库当成「无标签」。
 # 这份划分由 tests/test_contract.py 实测守住,不靠人记得更新。
-dependencies = []
+dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]
 yaml = ["PyYAML>=6.0"]

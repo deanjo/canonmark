@@ -1,6 +1,6 @@
 # canonmark 作为 pre-commit hook 仓库供其它项目引用。使用方在其 .pre-commit-config.yaml：
 #   repos:
-#     - repo: https://github.com/canonmark/canonmark
+#     - repo: https://github.com/deanjo/canonmark
 #       rev: v0.1.0
 #       hooks:
 #         - id: canon-audit

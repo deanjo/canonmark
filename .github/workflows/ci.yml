@@ -9,12 +9,18 @@ on:
 
 jobs:
   tests:
+    # 声称支持的每个 Python 版本都真跑一遍——requires-python 说 >=3.9,
+    # 就不许只测 3.11 然后让下游用户替我们发现 3.9 跑不起来。
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "${{ matrix.python-version }}"
       - run: pip install -e ".[dev]"
       - run: python -m pytest tests/ -q
 
