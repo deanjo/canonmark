@@ -22,7 +22,7 @@ last_reviewed: 2026-08-19
 | A2 | P1 | 默认配置输出与 agong 原版逐字节一致(P1 时点) | 对同一 docs 树跑新旧审计器 diff | 无差异 | cksum 双方 `749520412 312` IDENTICAL——这是 P1 验收当时(2026-07-21)的历史证据,锚定该时点,今日不再可复现。**须如实记录:自 P5 起默认输出有意不再与原版逐字节一致**——agong 残留默认值已清空,且新增的 T10 对称性检查会报原版从不报的问题(与 A1 注脚及 README Status 同一口径)。本项 PASS 的范围限定为 P1 抽取时点 | PASS |
 | A3 | P1 | audit_v5 frontmatter 主体已参数化 | 翻转 `allowed_statuses` 应改变行为 | 行为随配置变,.py md5 不变 | 含/去 draft → V5 PASS↔FAIL | PASS |
 | A4 | P2 | src 无 agong 专属依赖 | `grep -ri` src/ | 仅注释/默认配置值,无代码依赖 | 命中全在注释/config 默认值 | PASS |
-| A5 | P2 | 纯标准库 + 可选 PyYAML 可跑 | `pip install -e . && canon --help` | 退出码 0 | canon/audit --help exit 0 | PASS |
+| A5 | P2 | 装上即可跑(依赖口径见证据栏) | `pip install -e . && canon --help` | 退出码 0 | canon/audit --help exit 0。**验收项原文是「纯标准库 + 可选 PyYAML 可跑」,锚定 P2 时点;2026-08-19 起 PyYAML 转为唯一硬依赖**——`pip install canonmark` 一步装齐,「可选」二字不再成立(转正理由:只装本体时读 frontmatter 的门报缺依赖、退出码 1,打脸 A20)。本项 PASS 的范围是「装完 `canon` 能起来」,这一判据两种口径下都成立;真实安装路径的冷装实证见 A26 | PASS |
 | A6 | P3 | canonmark 自审自身全 PASS | `canon audit docs/ --config canonmark.toml` | 全部 gate PASS,exit 0 | 全门 PASS,exit 0(门数随阶段增加,以命令输出为准) | PASS |
 | A7 | P3 | pre-commit + CI 各真跑绿一次 | `pre-commit run --all-files` + CI pipeline | 两条路均绿 | 2026-07-29 双路收口:本地——`pre-commit install` 已装入本仓与全新 clone,双向实测(坏 frontmatter 提交被钩子拦下 exit 1、干净提交放行);PATH 前提保留(提交环境需把 venv 的 bin 加进 PATH,否则报 `Executable canon not found`)。远端——私有仓 PR#1 首跑 CI,tests 与 self-audit 两 job 均 pass(actions run 30432342592)。此前「钩子未装、CI 从未跑」的诚实披露见 git 历史 | PASS |
 | A8 | P4 | INVALID fixture 精确报中 6 处埋雷 | `pytest tests/test_fixtures.py` | 恰好 6 类问题 | **P5 曾无声打破此项**(fixture 不被任何测试引用,gradual 把其中 2 处埋雷降级为提示),独立验收查出;修法:fixture 配置声明 `adoption_mode = "strict"`,并新建 `tests/test_fixtures.py` 把双向 oracle 接进 pytest,不再依赖人工跑 CLI | PASS |
@@ -43,6 +43,7 @@ last_reviewed: 2026-08-19
 | A23 | P7 后 | V12 任务框架预算门(软阈值提示 / 硬阈值失败 / 批准行放行) | `pytest tests/ -k FrameworkBudget -q` | 三档判定与 protocol §9.2 契约一致;无框架根时直接 PASS | 2026-08-19 零上下文独立复验 ACCEPT:软/硬/批准三档与无框架根路径逐条实测吻合(本仓自审 V12 即活证据) | PASS |
 | A24 | P7 后 | V13 状态登记表门(唯一登记表 + 登记表外状态词绊线) | `pytest tests/ -k StatusRegistry -q` | 登记表缺失/多张/重复 id/非法 status 判失败;绊线只报告不做语义判断,与 protocol §9.3 契约一致 | 2026-08-19 零上下文独立复验 ACCEPT:四类失败与绊线行为逐条实测吻合 | PASS |
 | A25 | P7 后 | `canon hook` 行为契约(PreToolUse 拦截) | `pytest tests/test_hook.py -q` + `echo '<PreToolUse JSON>' \| canon hook` | 退休文档的 Read 输出 deny JSON 且含替代去处;current / 未贴标签 / 非 docs 路径 / 非 Read 工具 / 解析失败一律静默放行 exit 0 | 2026-08-19 零上下文独立复验 ACCEPT:契约实测 + 13 组对抗探针(路径穿越/符号链接/兄弟目录前缀/环境变量冲突/坏输入)无静默放过、无误拦 | PASS |
+| A26 | P7 后 | 成品化:陌生人可安装可跑通 | `python -m build`(`dist/` 不入库,本地已构建过可跳过)→ `python -m venv /tmp/cm && /tmp/cm/bin/pip install dist/canonmark-*.whl && /tmp/cm/bin/canon audit 任一零标签项目/docs` | 装完即有可用的 `canon`,依赖自动装齐(不必记得装附加项);对零 frontmatter 老项目**全门 PASS、exit 0**,无缺依赖报错 | 2026-08-19 冷装实测:全新 venv 装 dist 里的 wheel,PyYAML 随之装入;对新建的零 frontmatter 老项目跑审计,全门 PASS、有指路提示、exit 0(门数与提示条数随阶段与项目形态而变,以命令输出为准)。这是 A20 在**真实安装路径**上的复验——A20 当时跑的是开发树,而用户拿到的是 wheel;PyYAML 还是可选附加项时这条正是失败的(读 frontmatter 的门缺依赖退出码 1),转正后才成立 | PASS |
 
 **A17/A18 状态说明(2026-07-28 记,2026-07-29 更新)**:P6(T13/T14)首轮独立验收判定 REJECT,修复后复验判定 ACCEPT(见 progress.md 2026-07-27 心跳;两项必办已完成并入 commit 6e21f78)。2026-07-29 用户裁决:据复验 ACCEPT 将 A17/A18 由 INSUFFICIENT_EVIDENCE 置 PASS。A19 维持 INSUFFICIENT_EVIDENCE——那是实验自身的局限(增量价值未证),不随本裁决改变。
 
@@ -90,9 +91,9 @@ A 组不用工具也答对了。诚实地说,**本实验没能证明 `canon_read
 
 ## 未验证范围(诚实边界)
 
-- GitHub 远程公开发布已于 2026-07-29 执行:用户明示「公开」拍板后由 agent 代执行,仓库现为 public——「发布永不自动执行」的铁律全程被遵守(从未由 agent 擅动)。PyPI 发布未立项,不在本表。
+- GitHub 远程公开发布已于 2026-07-29 执行:用户明示「公开」拍板后由 agent 代执行,仓库现为 public——「发布永不自动执行」的铁律全程被遵守(从未由 agent 擅动)。**PyPI 发布(2026-08-19 更新,原记「未立项」已过期)**:`v0.1.0` 已打 tag 并推送、发布物已构建,**上传 PyPI 仍未执行——扳机在用户手里,同一条铁律照旧**。因此 A26 的证据取自本地 wheel 冷装,不是从 PyPI 下载;「`pip install canonmark` 能从公网装到」这一条在上传前不成立。
 - **本地 pre-commit 钩子已收口(2026-07-29)**:本仓与全新 clone 均已 `pre-commit install`,双向实测——docs/design/ 下无 frontmatter 文档的提交被钩子拦下(exit 1),干净提交放行;全新 clone 从零走通(clone → venv → `pip install -e .` + `pip install pre-commit` → install → 提交)。PATH 前提仍在:提交环境需把 venv 的 bin 加进 PATH(如 `PATH="$PWD/.venv/bin:$PATH"`),否则钩子报 `Executable canon not found`。
-- **Python 版本**:`pyproject.toml` 声明 `>=3.9`,但 CI 只跑 3.11、本地是 3.14,3.9/3.10 从未实测。
+- **Python 版本(2026-08-19 更新)**:`pyproject.toml` 声明 `>=3.9`,CI 的 tests job 已扩为 3.9–3.13 矩阵(`fail-fast: false`),声称支持的每个版本都真跑一遍单测——原记载「CI 只跑 3.11、3.9/3.10 从未实测」到此为止,理由是声称支持却不测,等于让下游用户替我们发现跑不起来。剩余边界如实保留:self-audit job 仍只在 3.11 跑;本地开发机是 3.14,高于矩阵上限,该版本只有本地实跑、CI 无覆盖。
 - **写作端 skill 与本协议的权威映射冲突(两处)已于 2026-07-29 由用户裁决**:采纳协议立场,skill §1.5 映射已改为引用 `design/protocol.md` §4.1。能力边界不因裁决消失:canonmark 检查不到这类跨工具的规则冲突——它只校验自己配置内的一致性。
 - **宿主侧读取拦截已交付(2026-08-19)**:此前 README 与 protocol §7.7 的诚实边界写的是「硬拦截需要宿主侧钩子,超出本工具范围」——该表述已过时:`canon hook`(Claude Code PreToolUse 协议)已随仓提供,行为契约与复验命令见 A25。已知边界不因交付消失:**hook 只拦截内置 Read 工具,Bash `cat` 等读取路径仍是既有绕过**,本次有意不封,如实记档。
 - Windows 首跑(CRLF/BOM/反斜杠路径)第一版不覆盖,列入风险。

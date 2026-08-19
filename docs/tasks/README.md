@@ -6,7 +6,7 @@ current_authority: task-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-19
 ---
 
 # canonmark 任务台账
@@ -29,8 +29,8 @@ last_reviewed: 2026-07-29
 | T11 超期提示 + 孤儿检测 | P5 | 实现 agent | DONE | 新增 V11 门,**一律只进 notices 不影响退出码**;阈值 `last_reviewed_max_age_days` 默认 180 天且可配。孤儿检测四类豁免:README 自身、docs 根下文档、**所在目录还没有 README 时**(否则同一件事对该目录每篇文档各说一遍,V4 已提示过一次)、**已作废文档**(它们本就不该被导航链接,劝人加进 README 等于劝人踩 T12 那个错)——后两类由独立验收发现。**原任务名中的「新增未声明替代提示」不做**,理由见 roadmap P5 第 ④ 项 |
 | T12 README 清单与文档标签互检 | P5 | 实现 agent | DONE | 并入 V11;各级 README 指向自称 `superseded`/`archive` 的文档即判失败(protocol §7.6 已标注实现);目标未贴标签时无从判断状态,跳过。**`archive/` 下的索引 README 豁免**——列出归档文档正是它的本职(独立验收发现的误报) |
 | T13 `canon_read` 行为契约 + `canon index` 紧凑输出与过滤 | P6 | 实现 agent | DONE | `src/canonmark/read.py` + `index.py`,CLI `canon read` / `canon index --dir/--current-only/--json`。**首轮独立验收判定 REJECT → 修复后复验判定 ACCEPT**(必办已完成并入 commit 6e21f78;A17/A18 已按用户裁决 2026-07-29 置 PASS,过程见下「波次 3」段)。作废文档正文不返回(哨兵串断言,不靠人肉检查);正文交付时剥掉 frontmatter(头部摘要已给过,再附一遍等于同样的字节收两次费)。**机器判客观事实,不假装判语义**:按 status/superseded_by 过滤是机器的活,`not_for`/`applies_when` 是否命中当前任务由调用方判断——假装能匹配比不匹配更危险,一次错误的「不适用」会让 agent 跳过真正该读的文档。index 的紧凑性由「大小不随正文变长而增长」守住,比原判据「< 全文 10%」更本质(后者在文档很短时会失真) |
-| T14 MCP server + `canon init` 生成接线片段 | P6 | 实现 agent | DONE | `src/canonmark/mcp.py`(stdio JSON-RPC,`canon mcp`)+ `canon init --print-mcp`。**手写而非用官方 SDK**:canonmark 承诺 `pip install` 后纯标准库即可跑,MCP 的 stdio 传输就是逐行 JSON-RPC,自己实现的体量很小,不值得为省它引入额外依赖树;范围限于 initialize/tools/list/tools/call,完整握手有测试。**§7.5/§7.7 的措辞约束已机检,两层守卫**(现版口径;首版关键词黑名单被独立验收的变异测试击穿后改造):①强制原样——工具描述必须以禁令常量 `NOT_A_PREREQUISITE` 原文结尾,且该原文在测试内有独立字面量副本,防同源恒真;②去空格黑名单兜底——去空格后匹配「先…canon index」变体,覆盖描述、接线片段与宿主话术(须为 §7.7 原文)。如实边界:挡得住改写与删除,挡不住在别处增写相反指引,那只能靠人工审阅——把废止过的设计交给人的记性守不住,能交给测试的都交给测试。验收口径同 T13(首轮 REJECT → 复验 ACCEPT) |
-| T9 发布准备(README/pyproject 完善)+ 远程发布 | P7 | 主 agent + 用户 | DONE | 发布准备完成并经独立复验(A12 首轮 FAIL→翻正后 PASS);**公开发布已于 2026-07-29 执行**——用户明示「公开」拍板,agent 代执行 `gh repo edit --visibility public --accept-visibility-change-consequences`,仓库现为 public(https://github.com/deanjo/canonmark)。PyPI 发布未立项 |
+| T14 MCP server + `canon init` 生成接线片段 | P6 | 实现 agent | DONE | `src/canonmark/mcp.py`(stdio JSON-RPC,`canon mcp`)+ `canon init --print-mcp`。**手写而非用官方 SDK**:canonmark 承诺 `pip install` 后纯标准库即可跑,MCP 的 stdio 传输就是逐行 JSON-RPC,自己实现的体量很小,不值得为省它引入额外依赖树;范围限于 initialize/tools/list/tools/call,完整握手有测试。**§7.5/§7.7 的措辞约束已机检,两层守卫**(现版口径;首版关键词黑名单被独立验收的变异测试击穿后改造):①强制原样——工具描述必须以禁令常量 `NOT_A_PREREQUISITE` 原文结尾,且该原文在测试内有独立字面量副本,防同源恒真;②去空格黑名单兜底——去空格后匹配「先…canon index」变体,覆盖描述、接线片段与宿主话术(须为 §7.7 原文)。如实边界:挡得住改写与删除,挡不住在别处增写相反指引,那只能靠人工审阅——把废止过的设计交给人的记性守不住,能交给测试的都交给测试。验收口径同 T13(首轮 REJECT → 复验 ACCEPT)。**2026-08-19 更正注记(原文保留不改)**:本行写的「承诺 `pip install` 后纯标准库即可跑」已不是现行口径——PyYAML 当日转为唯一硬依赖;这条决定的实质理由不变(除 PyYAML 外不给使用者压额外依赖树),现行口径见 [design/protocol.md](../design/protocol.md) §7.7 与 [roadmap.md](../roadmap.md) P2 |
+| T9 发布准备(README/pyproject 完善)+ 远程发布 | P7 | 主 agent + 用户 | DONE | 发布准备完成并经独立复验(A12 首轮 FAIL→翻正后 PASS);**公开发布已于 2026-07-29 执行**——用户明示「公开」拍板,agent 代执行 `gh repo edit --visibility public --accept-visibility-change-consequences`,仓库现为 public(https://github.com/deanjo/canonmark)。PyPI 发布未立项。**2026-08-19 更正注记(原文保留不改)**:「PyPI 发布未立项」已过期——`v0.1.0` 已打 tag 并推送、发布物已构建,唯上传 PyPI 未执行,扳机仍在用户手里(红线不变);现行口径见 [acceptance.md](../acceptance.md)「未验证范围」 |
 
 ## 当前波次
 

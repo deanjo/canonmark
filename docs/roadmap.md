@@ -33,7 +33,7 @@ last_reviewed: 2026-08-19
 
 ### P2 只抽通用件(擦干净)
 抽取时就排除不可移植件:`gen_diagrams`(macOS 字体依赖)、task-packet lint(绑内部共识)、java hook(死代码)。新仓从第一天就干净。
-出口:`src/` 无 agong 专属依赖;`pip install` 后纯标准库 + 可选 PyYAML 即可跑。
+出口:`src/` 无 agong 专属依赖;`pip install canonmark` 后开箱即跑。**依赖口径 2026-08-19 起更新:PyYAML 是唯一硬依赖**(本节原写「纯标准库 + 可选 PyYAML」,锚定 P2 时点)——转正理由是实测踩出来的:只装本体时读 frontmatter 的那几个门报缺依赖、退出码 1,与 P5 定下的「存量项目装上不当场变红」(A20)自相矛盾。除 PyYAML 外仍不引入任何第三方依赖树;哪些门在缺 PyYAML 时还能跑,由 `pyproject.toml` 注释声明并由 `tests/test_contract.py` 实测守住。冷装可跑通的证据见 [acceptance.md](acceptance.md) 的 A26。
 
 ### P3 自审反馈链路(dogfood,《系统之美》核心)
 canonmark 用自己的 `canon audit` 审自己的 `docs/`;接 pre-commit + GitHub Action;42 单测建独立 CI job(与文档提交解耦)。形成「文档变脏 → 自动检测 → 挡住」的负反馈回路——用最少机制,让系统自己审自己。
