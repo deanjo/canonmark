@@ -89,12 +89,15 @@ than copies.
 ## Quick start
 
 ```bash
-pip install canonmark
+pip install git+https://github.com/deanjo/canonmark
 ```
 
-Requires Python 3.9+. PyYAML is pulled in automatically — it is a real dependency,
-not an optional extra, so a fresh install works out of the box. (If you install
-from a clone instead, `pip install -e .` gets you the same thing.)
+Requires Python 3.9+ (3.9 through 3.13 are covered by CI). PyYAML is pulled in
+automatically — it is a real dependency, not an optional extra, so a fresh install
+works out of the box.
+
+Not on PyPI yet, so the install comes straight from git: one command, same result.
+(From a clone: `pip install -e .`)
 
 ```bash
 canon init                     # scaffold canonmark.toml + print the MCP wiring

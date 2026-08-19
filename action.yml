@@ -16,6 +16,6 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      run: pip install canonmark
+      run: pip install git+https://github.com/deanjo/canonmark
     - shell: bash
       run: canon audit "${{ inputs.path }}" --config "${{ inputs.config }}"
