@@ -1,5 +1,7 @@
 # canonmark
 
+*English · [简体中文](README.zh-CN.md)*
+
 > **Tell your AI agents which doc to trust.**
 
 Your `docs/` folder is context now. AI coding agents (Claude Code, Cursor, Copilot)
@@ -259,7 +261,8 @@ because it contained a genuine one-sided declaration the new check now catches.
 
 P6 added the reading path: `canon read` (contract-filtered delivery), `canon index`
 (compact listing), and `canon mcp` (an MCP server, hand-written over stdio JSON-RPC
-so no MCP SDK is pulled in; PyYAML became a hard dependency on 2026-08-19 so a fresh `pip install` works out of the box). P6 went through independent review twice:
+so no MCP SDK is pulled in; PyYAML became a hard dependency on 2026-08-19 so a
+fresh install works out of the box). P6 went through independent review twice:
 the first round returned REJECT (nine findings); after fixes, the re-review
 returned ACCEPT, with its mandatory follow-ups folded into commit `6e21f78`. The
 matching acceptance rows (A17/A18) stayed `INSUFFICIENT_EVIDENCE` until a human
@@ -269,9 +272,13 @@ question is written up in [docs/acceptance.md](docs/acceptance.md) — including
 part it failed to show, which is that `canon_read`'s benefit *over labels alone*
 remains unproven at the scale tested.
 
+2026-08-19 added host-side interception (`canon hook`), task-framework governance
+(V12/V13), and the productization pass: PyYAML promoted to a real dependency, CI
+extended to 3.9–3.13, install and wiring docs filled in.
+
 Public on GitHub since 2026-07-29 — by an explicit human decision; the release
 step was deliberately never automated. Not yet published to PyPI — install from
-source for now. See
+git for now. See
 [docs/acceptance.md](docs/acceptance.md) for the verification matrix and
 [docs/progress.md](docs/progress.md) for the current state.
 
