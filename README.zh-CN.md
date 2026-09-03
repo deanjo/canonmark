@@ -74,10 +74,11 @@ agent 先解析 frontmatter → 跟随 superseded_by → 改读 api-design-v2.md
 
 一句话:**AGENTS.md 告诉 agent 怎么干活,canonmark 告诉 agent 该信哪篇文档。**
 
-还有一层分工:canonmark 是**检查端**。与它配套的**写作端**是
-`technical-plan-sharding` skill,它指导怎么写出那套分片方案文档
-(Roadmap 入口、契约分片、任务分片、验收矩阵)——正是这些门要校验的对象。
-该 skill 尚未随本仓发布;元数据词汇表与合法矩阵只有一个事实源,即
+还有一层分工:canonmark 是**检查端**。与它配套的**写作端**是两个 skill:
+`docs-standard` 管通用文档的树形分模块、README 职责、frontmatter 两层、命名与删除门禁;
+`technical-plan-sharding` 管分片方案文档(Roadmap 入口、契约分片、任务分片、验收矩阵)
+——正是这些门要校验的对象。两个 skill 都住本机 `ai_development/skills/shared/`,
+尚未随本仓发布;元数据词汇表与合法矩阵只有一个事实源,即
 [protocol §4](docs/design/protocol.md),写作端引用它而非复制。
 
 ## 快速开始

@@ -385,5 +385,74 @@ class CanonIndexTest(ReadTestBase):
     self.assertEqual("-", entries["docs/guides/start.md"].status)
 
 
+class CanonReadEvidenceCliTest(ReadTestBase):
+  """`canon read --evidence`：具名证据通道——退休文档才追加原文，横幅先声明不是现行事实。"""
+
+  def labeled(
+      self,
+      status: str,
+      body: str,
+      authority: str = "contract-current",
+      supersedes: str = "[]",
+      superseded_by: str = "[]",
+  ) -> str:
+    return (
+        f"---\nstatus: {status}\napplies_when: 实现支付重试\nnot_for: 对账\n"
+        f"current_authority: {authority}\nsupersedes: {supersedes}\n"
+        f"superseded_by: {superseded_by}\nowner: payments\n"
+        f"last_reviewed: 2026-07-27\n---\n\n# 标题\n\n{body}\n"
+    )
+
+  def run_cli(self, *argv: str) -> tuple[int, str]:
+    import contextlib
+    import io
+
+    from canonmark.cli import main
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+      code = main(list(argv))
+    return code, buffer.getvalue()
+
+  def retired(self) -> Path:
+    self.write(
+        "docs/design/new.md",
+        self.labeled("current", "现行正文", supersedes="[old.md]"),
+    )
+    return self.write(
+        "docs/design/old.md",
+        self.labeled(
+            "superseded",
+            SENTINEL,
+            authority="historical-evidence",
+            superseded_by="[new.md]",
+        ),
+    )
+
+  def test_evidence_flag_delivers_retired_body_after_a_banner(self) -> None:
+    code, output = self.run_cli("read", "--evidence", str(self.retired()))
+
+    self.assertEqual(0, code)
+    self.assertIn("docs/design/new.md", output)
+    self.assertIn("不是现行事实", output)
+    self.assertLess(output.index("不是现行事实"), output.index(SENTINEL))
+
+  def test_without_the_flag_the_retired_body_is_still_withheld(self) -> None:
+    code, output = self.run_cli("read", str(self.retired()))
+
+    self.assertEqual(1, code)
+    self.assertNotIn(SENTINEL, output)
+
+  def test_evidence_flag_is_a_no_op_for_current_documents(self) -> None:
+    path = self.write(
+        "docs/design/live.md", self.labeled("current", "现行正文")
+    )
+    code, output = self.run_cli("read", "--evidence", str(path))
+
+    self.assertEqual(0, code)
+    self.assertNotIn("不是现行事实", output)
+    self.assertEqual(1, output.count("现行正文"))
+
+
 if __name__ == "__main__":
   unittest.main()

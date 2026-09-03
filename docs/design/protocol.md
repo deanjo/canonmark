@@ -152,6 +152,8 @@ superseded_by ─▶ status ─▶ not_for ─▶ applies_when ─▶ current_au
 
 canonmark 是**检查端**。与之配套的**写作端**是 `technical-plan-sharding` skill(本机 Codex 全局 skill),它指导如何写出 Roadmap 入口 / 契约分片 / 任务分片 / 验收矩阵——正好对应本协议的四个 `*-current` 角色。两者同源:该 skill §1.5 的 frontmatter 模板是本协议 8 字段中的 6 个(缺 `owner` / `last_reviewed`),§6 的验收五值枚举与 `acceptance.md` 的判定五态一字不差。
 
+**2026-09-03 补登记**:写作端现为两个 skill,均住本机 `ai_development/skills/shared/`(Claude / Codex 双端软链,无远端、未随本仓发布):`docs-standard` 管通用文档——树形分模块、README 职责、frontmatter 两层(关键文档 8 字段 / 其余 3 字段)、命名、删除与门禁;`technical-plan-sharding` 管分片方案。两者都只引用本节词汇表与 §4 矩阵,不复制。
+
 **分工**:skill 管「怎么写出合规文档」(靠自觉),canonmark 管「写完了机器验一遍」(靠门禁)。**词汇表与合法矩阵以本节为单一事实源**,写作端引用而非复制——否则加字段、改矩阵要改两处,迟早漂移。
 
 **已知冲突,共两处——2026-07-29 已由用户裁决:采纳本协议立场,skill §1.5 的映射已改为引用本节**(原冲突记录保留如下,作为「先冻结、后裁决」的先例):
@@ -300,7 +302,7 @@ README 文件清单标注为现行、而该文档自身声明已作废时,判为
 1. **为什么必须有 MCP 这一层**:写在文档里的约定,agent 得先读到那篇文档才知道(先有鸡先有蛋);注册进工具面的能力,它睁眼就看见。这就是 T14 说的「让能力出现在消费者工具面,而非仅存在于文档约定」。
 2. **为什么手写 MCP server 而不用官方 SDK**:canonmark 把依赖面刻意压到最小——**2026-08-19 起唯一的硬依赖是 PyYAML**(本条原写「承诺 `pip install` 后纯标准库即可跑」,那是 PyYAML 转正前的口径),除它之外不给使用者压任何第三方依赖树。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0,自己实现的体量很小,不值得为省它把一棵额外依赖树压给每个使用者。实现范围限于 `initialize` / `tools/list` / `tools/call` 三个方法,够跑通工具调用;完整握手有测试覆盖。
 
-**诚实边界(2026-08-19 更新:宿主侧钩子已交付)**:话术仍是话术——工具进了列表、描述里写死了「替代直接读文件」,agent 理论上仍可能顺手用内置读取工具绕过去。此前的结论是「拦死需要宿主侧钩子,超出本工具范围」;该钩子现已随仓提供:`canon hook` 实现 Claude Code 的 PreToolUse 拦截协议,内置 Read 命中 docs 根下退休文档(`superseded` / `archive`)时**直接拒绝并给出替代去处**(状态判定与文案和 `canon read` 同一逻辑源);`canon init --print-hook` 打印接线用的 settings.json 片段。这把「先读标签」从三重提示升级为宿主侧强制。已知边界如实保留:**hook 只拦截 Read 工具,Bash `cat` 等其他读取路径不在拦截范围**;current / 未贴标签 / 非 docs 路径 / 解析失败一律静默放行(哲学同 V11 的分级:闸机故障不得锁死全库)。
+**诚实边界(2026-08-19 更新:宿主侧钩子已交付)**:话术仍是话术——工具进了列表、描述里写死了「替代直接读文件」,agent 理论上仍可能顺手用内置读取工具绕过去。此前的结论是「拦死需要宿主侧钩子,超出本工具范围」;该钩子现已随仓提供:`canon hook` 实现 Claude Code 的 PreToolUse 拦截协议,内置 Read 命中 docs 根下退休文档(`superseded` / `archive`)时**直接拒绝并给出替代去处**(状态判定与文案和 `canon read` 同一逻辑源);`canon init --print-hook` 打印接线用的 settings.json 片段。这把「先读标签」从三重提示升级为宿主侧强制。已知边界(2026-09-03 更新:Bash 侧门已纳入):hook 拦截 Read,以及 Bash 里 cat / head / tail / sed / awk / grep 等读取动词**点名**退休文档的命令(管道、串联的每一段单独判定,通配符先展开;`sed -i` 视为写入放行);python / perl / xxd 等其他读取形态与 `cd` 后的相对路径漂移不封。具名证据需要时的合法通道是 `canon read --evidence <path>`,拒绝文案里直接给出可运行的命令。current / 未贴标签 / 非 docs 路径 / 解析失败一律静默放行(哲学同 V11 的分级:闸机故障不得锁死全库)。
 
 ## 8. 与协议交互的清单(自查)
 

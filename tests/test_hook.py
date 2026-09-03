@@ -81,6 +81,14 @@ class HookTestBase(unittest.TestCase):
         "cwd": str(self.root),
     }
 
+  def bash_event(self, command: str) -> dict:
+    return {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": command, "description": "测试"},
+        "cwd": str(self.root),
+    }
+
   def hook(
       self,
       payload: dict | str,
@@ -210,6 +218,81 @@ class HookAllowTest(HookTestBase):
     self.assert_allowed(self.event(str(self.root / "docs/ghost.md")))
 
 
+class HookBashTest(HookTestBase):
+  """Bash 侧门：只有读取动词点名退休文档才拦，其余一律放行。"""
+
+  def deny_reason(self, command: str) -> str:
+    output, code = self.hook(self.bash_event(command))
+    self.assertEqual(0, code, command)
+    decision = json.loads(output)["hookSpecificOutput"]
+    self.assertEqual("deny", decision["permissionDecision"], command)
+    self.assertNotIn(SENTINEL, output)
+    return decision["permissionDecisionReason"]
+
+  def test_cat_of_retired_document_is_denied_with_evidence_hint(self) -> None:
+    reason = self.deny_reason("cat docs/design/old.md")
+    self.assertIn("docs/design/new.md", reason)
+    self.assertIn("read --evidence docs/design/old.md", reason)
+
+  def test_every_segment_of_pipes_and_chains_is_checked(self) -> None:
+    for command in (
+        "git status && cat docs/design/old.md",
+        "cat docs/design/old.md | head -5",
+        "sed -n '1,20p' docs/archived.md",
+        "head -20 < docs/design/old.md",
+        "FOO=1 sudo /bin/cat docs/design/old.md 2>&1",
+    ):
+      with self.subTest(command=command):
+        self.deny_reason(command)
+
+  def test_glob_and_absolute_paths_are_judged(self) -> None:
+    self.deny_reason("cat docs/design/*.md")
+    self.deny_reason(f"cat {self.root / 'docs/design/old.md'}")
+
+  def test_sed_in_place_edit_is_allowed(self) -> None:
+    self.assert_allowed(
+        self.bash_event("sed -i '' 's/a/b/' docs/design/old.md")
+    )
+    self.assert_allowed(
+        self.bash_event("sed --in-place 's/a/b/' docs/design/old.md")
+    )
+
+  def test_non_read_verbs_are_allowed(self) -> None:
+    for command in (
+        "wc -l docs/design/old.md",
+        "git mv docs/design/old.md docs/design/older.md",
+        "ls -la docs/design/old.md",
+        "canon read --evidence docs/design/old.md",
+        "rm docs/design/old.md",
+    ):
+      with self.subTest(command=command):
+        self.assert_allowed(self.bash_event(command))
+
+  def test_current_ungoverned_outside_and_missing_documents_are_allowed(
+      self,
+  ) -> None:
+    for command in (
+        "cat docs/design/new.md",
+        "cat docs/notes.md",
+        "cat outside.md",
+        "cat docs/ghost.md",
+    ):
+      with self.subTest(command=command):
+        self.assert_allowed(self.bash_event(command))
+
+  def test_commands_without_markdown_exit_early(self) -> None:
+    self.assert_allowed(self.bash_event("git status"))
+    self.assert_allowed(self.bash_event("cat README"))
+
+  def test_unbalanced_quotes_fail_open(self) -> None:
+    self.assert_allowed(self.bash_event('cat "docs/design/old.md'))
+
+  def test_missing_command_field_is_allowed(self) -> None:
+    payload = self.bash_event("cat docs/design/old.md")
+    payload["tool_input"] = {"description": "没有 command"}
+    self.assert_allowed(payload)
+
+
 class HookExecutableTest(HookTestBase):
 
   def test_real_canon_hook_denies_superseded_document(self) -> None:
@@ -231,6 +314,29 @@ class HookExecutableTest(HookTestBase):
     self.assertEqual(0, completed.returncode)
     decision = json.loads(completed.stdout)["hookSpecificOutput"]
     self.assertEqual("deny", decision["permissionDecision"])
+    self.assertNotIn(SENTINEL, completed.stdout)
+
+  def test_real_canon_hook_denies_bash_cat_and_names_itself(self) -> None:
+    """Bash 事件走真实可执行文件：拦下，且证据命令用的是本次被调用的绝对路径。"""
+    if not VENV_CANON.is_file():
+      self.skipTest(f"未找到 {VENV_CANON}")
+
+    completed = subprocess.run(
+        [str(VENV_CANON), "hook"],
+        input=json.dumps(
+            self.bash_event("cat docs/design/old.md"), ensure_ascii=False
+        ),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(self.root)},
+    )
+
+    self.assertEqual(0, completed.returncode)
+    decision = json.loads(completed.stdout)["hookSpecificOutput"]
+    self.assertEqual("deny", decision["permissionDecision"])
+    self.assertIn(
+        f"{VENV_CANON} read --evidence", decision["permissionDecisionReason"]
+    )
     self.assertNotIn(SENTINEL, completed.stdout)
 
 

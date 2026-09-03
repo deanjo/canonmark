@@ -81,12 +81,13 @@ One line: **AGENTS.md tells the agent how to work; canonmark tells the agent whi
 doc to trust.**
 
 One more division of labor: canonmark is the **checking side**. Its writing-side
-counterpart is the `technical-plan-sharding` skill, which guides how to write the
-sharded plan doc set (roadmap entry, contracts, task shards, acceptance matrix)
-that these gates then verify. That skill is not shipped with this repo yet; the
-metadata vocabulary and legality matrix have a single source of truth —
-[protocol §4](docs/design/protocol.md) — which the writing side references rather
-than copies.
+counterparts are two skills: `docs-standard` (module-first doc tree, README
+duties, two-tier frontmatter, naming, deletion and gating rules for ordinary
+docs) and `technical-plan-sharding` (the sharded plan doc set — roadmap entry,
+contracts, task shards, acceptance matrix — that these gates then verify). Neither
+skill ships with this repo yet; the metadata vocabulary and legality matrix have a
+single source of truth — [protocol §4](docs/design/protocol.md) — which the
+writing side references rather than copies.
 
 ## Quick start
 

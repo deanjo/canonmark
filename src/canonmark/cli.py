@@ -98,7 +98,7 @@ HOOK_CONFIG_SNIPPET = """\
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read",
+        "matcher": "Read|Bash",
         "hooks": [
           {
             "type": "command",
@@ -118,7 +118,8 @@ HOOK_HELP = f"""\
 # hook 由 Claude Code 直接执行，`canon` 须在它的 PATH 上；装在 venv 里时把
 # command 里的 canon 换成绝对形式："$CLAUDE_PROJECT_DIR/.venv/bin/canon" hook ...
 
-# 之后 agent 用内置 Read 读 docs 下退休文档时会被拒绝并收到替代去处；
+# 之后 agent 用内置 Read、或 Bash 里 cat / sed / head 等读取命令点名 docs 下退休文档时，
+# 会被拒绝并收到替代去处与 `canon read --evidence` 证据通道；
 # hook 自身故障一律放行（fail-open），不会锁死正常读取。
 """
 
@@ -190,6 +191,11 @@ def build_parser() -> argparse.ArgumentParser:
       ),
   )
   read.add_argument("path", help="要读取的文档路径")
+  read.add_argument(
+      "--evidence",
+      action="store_true",
+      help="具名证据需要：退休文档在状态与替代目标之后追加原文，横幅标明不是现行事实",
+  )
   read.add_argument(
       "--config",
       metavar="FILE",
@@ -334,6 +340,16 @@ def run_read(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
   result = read_document(target, root, config)
   print(render_read_result(result))
+  if (
+      getattr(args, "evidence", False)
+      and result.body_withheld
+      and result.status in config.historical_statuses
+  ):
+    # 具名证据通道：调用方明确要历史正文，横幅先声明它不是现行事实。
+    # 只对退休文档生效——元数据残缺、冲突的文档不在此列，那是要修标签的事。
+    print(f"--- 历史证据正文（status: {result.status}，不是现行事实）---")
+    print(target.read_text(encoding="utf-8"), end="")
+    return 0
   # 正文被扣下时以非零退出，让脚本能察觉「这篇不能用」。
   return 1 if result.body_withheld else 0
 
