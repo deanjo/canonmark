@@ -96,6 +96,7 @@ pip install git+https://github.com/deanjo/canonmark
 ```bash
 canon init                     # 生成 canonmark.toml,并打印 MCP 接线配置
 canon audit docs/              # 审计权威元数据;有冲突时退出码非 0
+canon doctor                   # 打印给会话内 AI 的只读文档体检任务单
 canon read docs/design/x.md    # 按契约读一篇文档(见下文)
 canon index --current-only     # 紧凑的标签清单;按需使用,绝不是读文档的前置步骤
 canon mcp                      # 以 MCP server 运行,让 agent 的工具面出现 canon_read

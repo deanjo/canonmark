@@ -220,6 +220,8 @@ class GovernanceConfig:
   trigger_paths: tuple[str, ...] = ("docs/",)
   # 审计器自身安家的位置（相对仓库根），供 hook 定位脚本。
   auditor_home: str = "."
+  # 写作规范指针：相对仓库根的路径或 URL。追加在字段末尾以保持既有位置参数兼容。
+  standard: str = ""
 
   def __post_init__(self) -> None:
     """把源正则字符串编译为已编译对象，并派生依赖 docs_root 的正则。"""
@@ -227,6 +229,10 @@ class GovernanceConfig:
       allowed = ", ".join(sorted(ADOPTION_MODES))
       raise ValueError(
           f"adoption_mode 取值非法：{self.adoption_mode!r}；可选值：{allowed}"
+      )
+    if not isinstance(self.standard, str):
+      raise ValueError(
+          f"standard 必须是字符串；实际类型：{type(self.standard).__name__}"
       )
     self._directory_name_re = re.compile(self.directory_name_regex)
     self._key_document_signal_re = re.compile(

@@ -29,7 +29,7 @@ from datetime import date
 import re
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 from urllib.parse import unquote as _unquote
 from urllib.parse import urlsplit as _urlsplit
 
@@ -2129,21 +2129,32 @@ AUDITORS = {
 }
 
 
-def print_result(result: GateResult) -> None:
-  """输出稳定、可被 CI 阅读的 gate 结果。提示不影响 PASS/FAIL 判定。"""
+def render_result(
+    result: GateResult,
+    detail_message: Callable[[Issue], str] | None = None,
+) -> str:
+  """渲染稳定 gate 结果；可替换明细说明，但不改变计数与定位。"""
   issues = sorted(set(result.issues))
   notices = sorted(set(result.notices))
+  message_for = detail_message or (lambda detail: detail.message)
   suffix = f"；{len(notices)} 条提示" if notices else ""
+  lines: list[str] = []
   if issues:
-    print(
+    lines.append(
         f"{result.gate} FAIL {result.anchor} - "
         f"{len(issues)} 个问题；已检查 {result.checked}{suffix}"
     )
     for issue in issues:
-      print(f"  {issue.path}:{issue.line} - {issue.message}")
+      lines.append(f"  {issue.path}:{issue.line} - {message_for(issue)}")
   else:
-    print(
+    lines.append(
         f"{result.gate} PASS {result.anchor} - 已检查 {result.checked}{suffix}"
     )
   for note in notices:
-    print(f"  提示 {note.path}:{note.line} - {note.message}")
+    lines.append(f"  提示 {note.path}:{note.line} - {message_for(note)}")
+  return "\n".join(lines)
+
+
+def print_result(result: GateResult) -> None:
+  """输出稳定、可被 CI 阅读的 gate 结果。"""
+  print(render_result(result))

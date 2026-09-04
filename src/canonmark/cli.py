@@ -4,6 +4,8 @@
   ``canon audit [PATH] [--config FILE] [--all | --gates V2,V4,...]``
       审计 PATH 指向的 docs 目录（省略则从当前目录向上发现仓库根 + config.docs_root）。
       任一 gate FAIL 退出 1，全过退出 0。
+  ``canon doctor [PATH] [--config FILE] [--dir SUBDIR]``
+      打印给会话内 AI 的只读体检任务单；audit FAIL 不改变退出码。
   ``canon read PATH [--config FILE]``
       按权威契约读取一篇文档：作废文档不返回正文，只给状态与替代目标。
       正文被扣下时退出 1，让脚本能察觉「这篇不能用」。
@@ -27,6 +29,7 @@ from typing import Sequence
 
 from .audit import AUDITORS, SUPPORTED_GATES, discover_repo_root, print_result
 from .config import load_config
+from .doctor import DoctorUnavailable, run_doctor
 from .hook import run_hook
 from .index import IndexUnavailable, build_index, render_index
 from .mcp import serve as serve_mcp
@@ -46,6 +49,9 @@ adoption_mode = "gradual"
 
 # docs 根目录名（相对仓库根）。
 docs_root = "docs"
+
+# 写作规范指针：相对仓库根的路径或 URL。留空表示尚未配置。
+standard = ""
 
 # V2 目录命名白名单（产品代号 / 元目录例外）。通用默认建议留空。
 v2_path_exceptions = []
@@ -180,6 +186,30 @@ def build_parser() -> argparse.ArgumentParser:
       "--all",
       action="store_true",
       help="执行全部 gate（缺省行为）：V2,V4,V5,V9,V10,V11,V12,V13",
+  )
+
+  doctor = subparsers.add_parser(
+      "doctor",
+      help="打印给会话内 AI 的只读文档体检任务单",
+      description=(
+          "收集完整目录、标签与全库 audit 事实，打印只读诊断流程；"
+          "命令本身不调用 AI、不联网、不修改文件。"
+      ),
+  )
+  doctor.add_argument(
+      "path",
+      nargs="?",
+      help="要体检的 docs 目录；省略则从当前目录向上发现仓库根",
+  )
+  doctor.add_argument(
+      "--config",
+      metavar="FILE",
+      help="治理配置文件（YAML 或 TOML）；省略则使用内置默认值",
+  )
+  doctor.add_argument(
+      "--dir",
+      metavar="SUBDIR",
+      help="只缩小目录树与内容盘点范围；全库 audit 不受影响",
   )
 
   read = subparsers.add_parser(
@@ -354,6 +384,35 @@ def run_read(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
   return 1 if result.body_withheld else 0
 
 
+def run_doctor_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> int:
+  """执行 doctor 子命令；合法诊断即使发现问题也退出 0。"""
+  try:
+    config = load_config(args.config)
+  except (FileNotFoundError, RuntimeError, ValueError) as error:
+    parser.error(str(error))
+
+  if args.path:
+    docs_path = Path(args.path).expanduser().resolve()
+    if not docs_path.is_dir():
+      parser.error(f"要体检的 docs 目录不存在：{docs_path}")
+    root = docs_path.parent
+    config = replace(config, docs_root=docs_path.name)
+  else:
+    try:
+      root = discover_repo_root(config)
+    except FileNotFoundError as error:
+      parser.error(str(error))
+
+  try:
+    output = run_doctor(root, config, args.dir)
+  except DoctorUnavailable as error:
+    parser.error(str(error))
+  print(output, end="")
+  return 0
+
+
 def run_index(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
   """执行 index 子命令。"""
   try:
@@ -415,6 +474,8 @@ def main(argv: Sequence[str] | None = None) -> int:
   args = parser.parse_args(argv)
   if args.command == "audit":
     return run_audit(args, parser)
+  if args.command == "doctor":
+    return run_doctor_command(args, parser)
   if args.command == "read":
     return run_read(args, parser)
   if args.command == "index":
