@@ -213,14 +213,18 @@ agent has to read a document to discover.
 That used to be the honest limit: filtering, not enforcement — the tool is in the
 list and its description says "use this instead of reading files directly," but an
 agent could still reach for its built-in file reader. The host-side hook now ships
-with the repo: `canon hook` implements Claude Code's PreToolUse protocol, denying
-a built-in `Read` of a retired doc under `docs/` and answering with the same
-replacement pointer `canon read` gives; `canon init --print-hook` prints the
-`settings.json` snippet to wire it up. On hosts that support hooks, the reading
-path is upgraded from filtering to enforcement. The boundary that remains, kept
-honest: the hook only intercepts the `Read` tool — reading a file through `Bash`
-(`cat`, `head`, …) is a known bypass, deliberately left open — and a parse failure
-always passes silently, because a broken turnstile must never lock the library.
+with the repo: `canon hook` implements the PreToolUse protocol, denying a built-in
+`Read` or a recognized `Bash` read of a retired doc under `docs/` and answering
+with the same replacement pointer `canon read` gives; `canon init --print-hook`
+prints the `settings.json` snippet to wire it up. On hosts that support hooks, the
+covered reading paths are upgraded from filtering to enforcement. The deny result
+also tells the agent to relay the replacement in its final answer; that guidance
+still needs behavioral verification and is not a runtime guarantee. If a retired
+doc declares no replacement, the hook names the first existing `README.md` found
+while walking upward to the docs root. The boundary that remains, kept honest:
+Python/Perl/xxd reads and relative paths after `cd` are not intercepted, and a
+parse failure always passes silently, because a broken turnstile must never lock
+the library.
 
 What it does buy you, mechanically: a retired doc's body never enters the context
 window, so it cannot be the thing the agent pattern-matches against later.

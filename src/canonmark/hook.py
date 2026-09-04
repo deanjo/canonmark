@@ -174,15 +174,40 @@ def _canon_executable() -> str:
   return "canon"
 
 
-def _deny(result: ReadResult, target: Path, base: Path) -> str:
-  """拒绝：复用 canon read 的文案，再给出具名证据通道的可运行命令。"""
+def _nearest_readme(target: Path, docs_dir: Path) -> Path | None:
+  """从目标目录向上找到首个真实存在的 README，最多检查到 docs 根。"""
+  current = target.parent
+  while current == docs_dir or docs_dir in current.parents:
+    candidate = current / "README.md"
+    if candidate.is_file():
+      return candidate
+    if current == docs_dir:
+      break
+    current = current.parent
+  return None
+
+
+def _deny(
+    result: ReadResult, target: Path, base: Path, docs_dir: Path
+) -> str:
+  """拒绝：复用 canon read 文案，给出证据通道与模型最终回复完成条件。"""
   try:
     shown: Path | str = target.relative_to(base)
   except ValueError:
     shown = target
+  fallback = _nearest_readme(target, docs_dir)
+  if fallback is not None:
+    try:
+      fallback_shown: Path | str | None = fallback.relative_to(base)
+    except ValueError:
+      fallback_shown = fallback
+  else:
+    fallback_shown = None
   reason = (
-      f"{render_read_result(result)}\n"
-      f"具名证据需要时：{_canon_executable()} read --evidence {shown}"
+      f"{render_read_result(result, fallback_readme=fallback_shown)}\n"
+      f"具名证据需要时：{_canon_executable()} read --evidence {shown}\n"
+      "Agent 完成条件：最终回复必须明确转告上方替代去处；"
+      "只报告读取失败不算完成。"
   )
   return json.dumps(
       {
@@ -231,7 +256,7 @@ def decide(
       continue
     if not result.body_withheld:
       continue
-    return _deny(result, target, base)
+    return _deny(result, target, base, docs_dir)
   return None
 
 

@@ -6,7 +6,7 @@ current_authority: contract-current
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-08-19
+last_reviewed: 2026-09-04
 ---
 
 # canonmark 权威元数据契约与判定协议
@@ -302,7 +302,7 @@ README 文件清单标注为现行、而该文档自身声明已作废时,判为
 1. **为什么必须有 MCP 这一层**:写在文档里的约定,agent 得先读到那篇文档才知道(先有鸡先有蛋);注册进工具面的能力,它睁眼就看见。这就是 T14 说的「让能力出现在消费者工具面,而非仅存在于文档约定」。
 2. **为什么手写 MCP server 而不用官方 SDK**:canonmark 把依赖面刻意压到最小——**2026-08-19 起唯一的硬依赖是 PyYAML**(本条原写「承诺 `pip install` 后纯标准库即可跑」,那是 PyYAML 转正前的口径),除它之外不给使用者压任何第三方依赖树。MCP 的 stdio 传输就是逐行 JSON-RPC 2.0,自己实现的体量很小,不值得为省它把一棵额外依赖树压给每个使用者。实现范围限于 `initialize` / `tools/list` / `tools/call` 三个方法,够跑通工具调用;完整握手有测试覆盖。
 
-**诚实边界(2026-08-19 更新:宿主侧钩子已交付)**:话术仍是话术——工具进了列表、描述里写死了「替代直接读文件」,agent 理论上仍可能顺手用内置读取工具绕过去。此前的结论是「拦死需要宿主侧钩子,超出本工具范围」;该钩子现已随仓提供:`canon hook` 实现 Claude Code 的 PreToolUse 拦截协议,内置 Read 命中 docs 根下退休文档(`superseded` / `archive`)时**直接拒绝并给出替代去处**(状态判定与文案和 `canon read` 同一逻辑源);`canon init --print-hook` 打印接线用的 settings.json 片段。这把「先读标签」从三重提示升级为宿主侧强制。已知边界(2026-09-03 更新:Bash 侧门已纳入):hook 拦截 Read,以及 Bash 里 cat / head / tail / sed / awk / grep 等读取动词**点名**退休文档的命令(管道、串联的每一段单独判定,通配符先展开;`sed -i` 视为写入放行);python / perl / xxd 等其他读取形态与 `cd` 后的相对路径漂移不封。具名证据需要时的合法通道是 `canon read --evidence <path>`,拒绝文案里直接给出可运行的命令。current / 未贴标签 / 非 docs 路径 / 解析失败一律静默放行(哲学同 V11 的分级:闸机故障不得锁死全库)。
+**诚实边界(2026-08-19 更新:宿主侧钩子已交付)**:话术仍是话术——工具进了列表、描述里写死了「替代直接读文件」,agent 理论上仍可能顺手用内置读取工具绕过去。此前的结论是「拦死需要宿主侧钩子,超出本工具范围」;该钩子现已随仓提供:`canon hook` 实现 Claude Code 的 PreToolUse 拦截协议,内置 Read 命中 docs 根下退休文档(`superseded` / `archive`)时**直接拒绝并给出替代去处**(状态判定与文案和 `canon read` 同一逻辑源);`canon init --print-hook` 打印接线用的 settings.json 片段。这把「先读标签」从三重提示升级为宿主侧强制。已知边界(2026-09-03 更新:Bash 侧门已纳入):hook 拦截 Read,以及 Bash 里 cat / head / tail / sed / awk / grep 等读取动词**点名**退休文档的命令(管道、串联的每一段单独判定,通配符先展开;`sed -i` 视为写入放行);python / perl / xxd 等其他读取形态与 `cd` 后的相对路径漂移不封。具名证据需要时的合法通道是 `canon read --evidence <path>`,拒绝文案里直接给出可运行的命令。2026-09-04 起,hook 拒绝结果末尾还把「最终回复必须明确转告上方替代去处,只报告读取失败不算完成」写成 agent 完成条件;这是模型可见指引,是否遵循仍须用独立会话实测,不是 hook 的运行时强制。退休文档没有声明替代目标且无解析诊断时,hook 从目标目录向上到 docs 根选择第一个真实存在的 `README.md`;若整条链都没有 README,仍拒绝正文并给通用向上查找提示。current / 未贴标签 / 非 docs 路径 / 解析失败一律静默放行(哲学同 V11 的分级:闸机故障不得锁死全库)。
 
 ## 8. 与协议交互的清单(自查)
 

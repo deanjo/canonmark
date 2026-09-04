@@ -40,8 +40,9 @@ class HookTestBase(unittest.TestCase):
             body=SENTINEL,
         ),
     )
+    self.write("docs/archive/README.md", "# 历史入口\n")
     self.write(
-        "docs/archived.md",
+        "docs/archive/retired/archived.md",
         self.doc(
             status="archive", authority="historical-evidence", body=SENTINEL
         ),
@@ -135,11 +136,16 @@ class HookDenyTest(HookTestBase):
     )
     self.assertNotIn(SENTINEL, output)
 
-  def test_archived_document_is_denied(self) -> None:
-    output, _ = self.hook(self.event(str(self.root / "docs/archived.md")))
+  def test_archived_document_is_denied_with_readme_fallback(self) -> None:
+    output, _ = self.hook(
+        self.event(str(self.root / "docs/archive/retired/archived.md"))
+    )
 
     decision = json.loads(output)["hookSpecificOutput"]
     self.assertEqual("deny", decision["permissionDecision"])
+    reason = decision["permissionDecisionReason"]
+    self.assertIn("请改读最近的 README 入口：docs/archive/README.md", reason)
+    self.assertIn("最终回复必须明确转告上方替代去处", reason)
     self.assertNotIn(SENTINEL, output)
 
   def test_relative_path_resolves_against_json_cwd(self) -> None:
@@ -233,12 +239,14 @@ class HookBashTest(HookTestBase):
     reason = self.deny_reason("cat docs/design/old.md")
     self.assertIn("docs/design/new.md", reason)
     self.assertIn("read --evidence docs/design/old.md", reason)
+    self.assertIn("最终回复必须明确转告上方替代去处", reason)
+    self.assertIn("只报告读取失败不算完成", reason)
 
   def test_every_segment_of_pipes_and_chains_is_checked(self) -> None:
     for command in (
         "git status && cat docs/design/old.md",
         "cat docs/design/old.md | head -5",
-        "sed -n '1,20p' docs/archived.md",
+        "sed -n '1,20p' docs/archive/retired/archived.md",
         "head -20 < docs/design/old.md",
         "FOO=1 sudo /bin/cat docs/design/old.md 2>&1",
     ):

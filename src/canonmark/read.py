@@ -242,7 +242,9 @@ def read_document(
   )
 
 
-def render_read_result(result: ReadResult) -> str:
+def render_read_result(
+    result: ReadResult, fallback_readme: Path | str | None = None
+) -> str:
   """渲染成交给消费者（人或 agent）的文本。"""
   lines: list[str] = []
   if result.verdict == SUPERSEDED:
@@ -255,7 +257,12 @@ def render_read_result(result: ReadResult) -> str:
       # 只有在「确实一个替代目标都没声明」时才这么说。声明了但解析失败时，
       # 下面的诊断会讲清楚是哪一个坏了——那种情况下说「没有指出替代目标」
       # 与事实相反，会把人引向错误的修法。
-      lines.append("⚠ 它没有指出替代目标，请回到所在目录的 README 找入口。")
+      if fallback_readme is not None:
+        lines.append(f"请改读最近的 README 入口：{fallback_readme}")
+      else:
+        lines.append(
+            "⚠ 它没有指出替代目标，请从所在目录向上查找最近的 README 入口。"
+        )
     else:
       lines.append("⚠ 它声明了替代目标，但无法定位：")
     lines.extend(f"⚠ {item}" for item in result.diagnostics)
