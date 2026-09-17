@@ -1667,6 +1667,38 @@ def last_reviewed_date(frontmatter: Frontmatter) -> date | None:
   return None
 
 
+def markdown_link_targets(
+    source: Path, resolved_docs: Path
+) -> Iterator[tuple[int, str, Path]]:
+  """遍历 source 正文里指向 docs 内 Markdown 文件的相对链接。
+
+  产出 (行号, 原始链接文本, 解析后的目标路径)。
+  """
+  text = source.read_text(encoding="utf-8", errors="replace")
+  for line_number, destination in iter_v10_links(text):
+    parts = relative_link_parts(destination)
+    if parts is None or parts[0] is None:
+      continue
+    target = (source.parent / parts[0]).resolve()
+    if target.suffix.lower() != ".md" or not target.is_file():
+      continue
+    if not target.is_relative_to(resolved_docs):
+      continue
+    yield line_number, destination, target
+
+
+def is_under_archive(
+    path: Path, docs_dir: Path, config: GovernanceConfig | None = None
+) -> bool:
+  """path 是否位于 docs 内任意层级的 archive/ 目录之下（模块级归档同样算）。"""
+  config = _cfg(config)
+  try:
+    relative = path.resolve().relative_to(docs_dir.resolve())
+  except ValueError:
+    return False
+  return config.archive_directory_name in relative.parts[:-1]
+
+
 def navigation_links(
     docs_dir: Path, config: GovernanceConfig | None = None
 ) -> Iterator[tuple[Path, int, str, Path]]:
@@ -1684,16 +1716,9 @@ def navigation_links(
     relative = readme.relative_to(docs_dir)
     if relative.parts and relative.parts[0] == config.archive_directory_name:
       continue
-    text = readme.read_text(encoding="utf-8", errors="replace")
-    for line_number, destination in iter_v10_links(text):
-      parts = relative_link_parts(destination)
-      if parts is None or parts[0] is None:
-        continue
-      target = (readme.parent / parts[0]).resolve()
-      if target.suffix.lower() != ".md" or not target.is_file():
-        continue
-      if not target.is_relative_to(resolved_docs):
-        continue
+    for line_number, destination, target in markdown_link_targets(
+        readme, resolved_docs
+    ):
       yield readme, line_number, destination, target
 
 
@@ -1702,7 +1727,7 @@ def audit_v11(
     config: GovernanceConfig | None = None,
     today: date | None = None,
 ) -> GateResult:
-  """V11 防腐烂：导航与标签互检判失败；久未复核与孤儿文档只提示。
+  """V11 防腐烂：导航与标签互检、现行文档链接已作废文档判失败；久未复核与孤儿文档只提示。
 
   分级的理由见 ``GateResult.notice``：能明确指认「谁和谁打架」的判失败，
   只能表达「这里可能变味了」的一律降级，否则门禁会被整个关掉。
@@ -1723,12 +1748,17 @@ def audit_v11(
 
   # T12：导航与标签互检。README 把一篇文档列为可读入口，而该文档自称已作废，
   # 两者必有一错——正是「导航过期藏不住，标签错误也藏不住」。
+  # 历史导航不算打架：任意层级 archive/ 里的索引 README 本职就是列出归档文档；
+  # 目标路径自带 archive/ 的链接是明示的历史追溯，读者不会误当现行入口。
   for readme, line_number, destination, target in navigation_links(
       docs_dir, config
   ):
     linked.add(target)
     status = document_status(target)
-    if status in config.historical_statuses:
+    if status in config.historical_statuses and not (
+        is_under_archive(readme, docs_dir, config)
+        or is_under_archive(target, docs_dir, config)
+    ):
       result.add(
           readme,
           line_number,
@@ -1775,6 +1805,45 @@ def audit_v11(
           "读者只能靠全文检索撞见。下一步：把它加入该目录 README 的导航",
           root,
       )
+
+    # T12 扩展：现行文档正文仍把已作废文档当入口（例如总账还指着被取代的交接卡）。
+    # README 已由上面的导航互检覆盖；evidence/ 只增不改、archive/ 本就是历史，
+    # 来源在这两处的不查；目标在 archive/ 下的链接属于明示的历史追溯，不算。
+    # 接替者链接自己在 supersedes 里声明取代的前任也不算：关系已由两端标签声明。
+    if (
+        status == "current"
+        and not is_navigation
+        and not is_under_archive(path, docs_dir, config)
+        and config.evidence_directory_name
+        not in {part.casefold() for part in relative.parts[:-1]}
+    ):
+      predecessors: set[Path] = set()
+      claimed = frontmatter.values.get("supersedes")
+      if isinstance(claimed, list):
+        for claimed_value in claimed:
+          if isinstance(claimed_value, str) and claimed_value.strip():
+            old = resolve_superseded_target(
+                path, claimed_value, root, docs_dir, config
+            )
+            if old is not None:
+              predecessors.add(old.resolve())
+      for line_number, destination, target in markdown_link_targets(
+          path, resolved_docs
+      ):
+        if target in predecessors:
+          continue
+        target_status = document_status(target)
+        if target_status in config.historical_statuses and not is_under_archive(
+            target, docs_dir, config
+        ):
+          result.add(
+              path,
+              line_number,
+              f"现行文档仍链接到已作废文档：{destination}"
+              f"（{display_path(target, root)} 自称 status={target_status}）。"
+              "下一步：改链到替代文档，或把已作废文档移入 archive/",
+              root,
+          )
 
     # T11 久未复核。
     reviewed = last_reviewed_date(frontmatter)

@@ -1267,6 +1267,81 @@ class AntiRotTest(AuditTestBase):
 
     self.assertEqual([], DOCS_AUDIT.audit_v11(self.root).issues)
 
+  def retired_document(self, status: str = "archive") -> str:
+    retired = self.valid_key_document(authority="historical-evidence")
+    return retired.replace("status: current", f"status: {status}")
+
+  def test_history_navigation_is_not_a_conflict(self) -> None:
+    """模块级 archive/ 里的索引 README、以及指进 archive/ 的追溯链接都不算打架。"""
+    self.write(
+        "docs/payments/archive/2026-01-01-old/old.md", self.retired_document()
+    )
+    self.write(
+        "docs/payments/archive/2026-01-01-old/README.md",
+        "# Old\n\n[old](./old.md)\n",
+    )
+    self.write(
+        "docs/payments/README.md",
+        "# Payments\n\n[历史](archive/2026-01-01-old/old.md)\n",
+    )
+
+    self.assertEqual([], DOCS_AUDIT.audit_v11(self.root).issues)
+
+  def test_current_document_linking_to_retired_document_fails(self) -> None:
+    """T12 扩展：总账一类现行文档还指着被取代的交接卡，必须判失败。"""
+    self.write("docs/sessions/old-card.md", self.retired_document("superseded"))
+    self.write(
+        "docs/execution/ledger.md",
+        self.valid_key_document() + "\n[交接卡](../sessions/old-card.md)\n",
+    )
+
+    result = DOCS_AUDIT.audit_v11(self.root)
+
+    self.assertEqual(
+        ["docs/execution/ledger.md"], [issue.path for issue in result.issues]
+    )
+    self.assertIn("现行文档仍链接到已作废文档", result.issues[0].message)
+
+  def test_successor_may_link_to_the_document_it_supersedes(self) -> None:
+    """接替者在正文里点名它取代的前任，关系已由 supersedes 声明，不算打架。"""
+    self.write("docs/decisions/old.md", self.retired_document("superseded"))
+    successor = self.valid_key_document().replace(
+        "supersedes: []", "supersedes:\n  - old.md"
+    )
+    self.write(
+        "docs/decisions/new.md", successor + "\n取代[旧决定](old.md)。\n"
+    )
+
+    self.assertEqual([], DOCS_AUDIT.audit_v11(self.root).issues)
+
+  def test_retired_link_check_skips_history_and_evidence(self) -> None:
+    """目标在 archive/ 下、来源在 evidence/ 或 archive/ 下、来源非现行，都不查。"""
+    self.write("docs/sessions/old-card.md", self.retired_document("superseded"))
+    self.write(
+        "docs/payments/archive/2026-01-01-old/old.md", self.retired_document()
+    )
+    link_out = "\n[交接卡](../../sessions/old-card.md)\n"
+    self.write(
+        "docs/payments/plan.md",
+        self.valid_key_document()
+        + "\n[历史](archive/2026-01-01-old/old.md)\n",
+    )
+    self.write(
+        "docs/payments/evidence/run.md", self.valid_key_document() + link_out
+    )
+    self.write(
+        "docs/payments/archive/2026-01-01-old/notes.md",
+        self.valid_key_document() + "\n[交接卡](../../../sessions/old-card.md)\n",
+    )
+    background = self.valid_key_document(authority="background-reference")
+    self.write(
+        "docs/payments/background.md",
+        background.replace("status: current", "status: background")
+        + "\n[交接卡](../sessions/old-card.md)\n",
+    )
+
+    self.assertEqual([], DOCS_AUDIT.audit_v11(self.root).issues)
+
   def test_orphan_document_is_only_a_notice(self) -> None:
     """孤儿只提示：能确定的是「没人链接它」，不能确定的是「它是否该被删」。"""
     self.write("docs/design/orphan.md", self.valid_key_document())
