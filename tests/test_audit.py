@@ -634,6 +634,26 @@ last_reviewed: 2026-07-11
         )
     )
 
+  def test_v5_execution_plan_title_does_not_force_task_shard(self) -> None:
+    path = self.root / "docs/desktop-ui/specs/desktop-redesign.md"
+    self.assertIsNone(
+        DOCS_AUDIT.technical_plan_expected_authority(
+            path, "# 桌面重设计与核心稳定版执行计划"
+        )
+    )
+
+    self.write_required_v5_documents()
+    relative = "docs/desktop-ui/specs/desktop-redesign.md"
+    self.write(
+        relative,
+        self.valid_key_document(
+            title="桌面重设计与核心稳定版执行计划",
+            authority="roadmap-current",
+        ),
+    )
+
+    self.assertEqual([], self.v5_issues_for(relative))
+
   def test_v5_superseded_by_rejects_missing_target(self) -> None:
     self.write_required_v5_documents()
     relative = "docs/design/old.md"

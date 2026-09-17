@@ -159,9 +159,11 @@ class GovernanceConfig:
       ("acceptance-current", r"(acceptance\s+matrix|验收矩阵)"),
   )
   acceptance_matrix_stem_regex: str = r"(?:^|_)acceptance_matrix(?:_|$)"
+  # 「执行计划」不在此列：项目级执行计划常是路线图入口（roadmap-current），
+  # 只凭标题关键词把它判成任务分片会误报。
   task_shard_identity_regex: str = (
       r"(task\s+shard|任务分片|implementation\s+plan|"
-      r"实现计划|实施计划|执行计划)"
+      r"实现计划|实施计划)"
   )
   # tasks/ 目录内任务文件名前缀（agong 现值容忍历史 agent_ 前缀）。
   task_file_prefix_regex: str = r"^(?:agent[-_.]?)?t\d+(?:[-_.]|$)"
