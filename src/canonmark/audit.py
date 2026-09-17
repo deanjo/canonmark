@@ -1696,7 +1696,10 @@ def is_under_archive(
     relative = path.resolve().relative_to(docs_dir.resolve())
   except ValueError:
     return False
-  return config.archive_directory_name in relative.parts[:-1]
+  # 与 evidence/ 的判断同口径，不区分大小写：目录写成 Archive/ 也不该整片误报。
+  return config.archive_directory_name in {
+      part.casefold() for part in relative.parts[:-1]
+  }
 
 
 def navigation_links(

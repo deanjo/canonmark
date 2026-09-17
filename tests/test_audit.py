@@ -1284,6 +1284,12 @@ class AntiRotTest(AuditTestBase):
         "docs/payments/README.md",
         "# Payments\n\n[历史](archive/2026-01-01-old/old.md)\n",
     )
+    # 目录名大小写不同也算归档，与 evidence/ 的判断同口径。
+    self.write("docs/billing/Archive/2026-01-01-old/old.md", self.retired_document())
+    self.write(
+        "docs/billing/README.md",
+        "# Billing\n\n[历史](Archive/2026-01-01-old/old.md)\n",
+    )
 
     self.assertEqual([], DOCS_AUDIT.audit_v11(self.root).issues)
 
