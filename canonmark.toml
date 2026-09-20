@@ -26,7 +26,7 @@ directory_name_label = "kebab-case"
 task_file_prefix_regex = "^t\\d+(?:[-_.]|$)"
 
 # V5 固定必备关键文档：canonmark 实际存在的三份权威文档。
-required_key_documents = ["roadmap.md", "acceptance.md", "kickoff.md"]
+required_key_documents = ["acceptance.md"]
 required_key_document_globs = []
 
 # 前瞻字段（供 pre-commit / CI hook 使用，当前审计逻辑不消费）。

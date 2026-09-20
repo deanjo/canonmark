@@ -1,12 +1,12 @@
 ---
 status: current
 owner: canonmark
-last_reviewed: 2026-07-21
+last_reviewed: 2026-09-20
 ---
 
 # 设计文档
 
-canonmark 的设计层。这里放「为什么这么做」与「协议怎么定义」，与阶段规划（[roadmap.md](../roadmap.md)）、验收判定（[acceptance.md](../acceptance.md)）分离。
+canonmark 的设计层。这里放「为什么这么做」与「协议怎么定义」；验收判定与诚实边界见 [acceptance.md](../acceptance.md)。
 
 ## 文件清单
 

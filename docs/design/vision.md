@@ -1,12 +1,12 @@
 ---
 status: current
 applies_when: 理解 canonmark 要解决什么问题、价值主张、与相邻工具的边界、相对同类早期项目的差异化定位
-not_for: 协议字段的逐字定义与五步判定算法(见 protocol.md)、阶段规划顺序(见 roadmap.md)、验收判定(见 acceptance.md)
+not_for: 协议字段的逐字定义与五步判定算法(见 protocol.md)、验收判定(见 acceptance.md)
 current_authority: background-reference
 supersedes: []
 superseded_by: []
 owner: canonmark
-last_reviewed: 2026-08-19
+last_reviewed: 2026-09-20
 ---
 
 # canonmark 愿景:让 AI agent 知道该信哪篇文档
